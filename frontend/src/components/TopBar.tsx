@@ -15,9 +15,10 @@ interface Props {
   onOpenProject: (file: File) => void;
   onRobotSetup: () => void;
   onExamples: () => void;
+  onDeploy: () => void;
 }
 
-export function TopBar({ robot, onUploadUrdf, connected, timecode, running, onToggleRunning, busy, projectName, onProjectName, onSaveProject, onOpenProject, onRobotSetup, onExamples }: Props) {
+export function TopBar({ robot, onUploadUrdf, connected, timecode, running, onToggleRunning, busy, projectName, onProjectName, onSaveProject, onOpenProject, onRobotSetup, onExamples, onDeploy }: Props) {
   const projectInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -33,6 +34,7 @@ export function TopBar({ robot, onUploadUrdf, connected, timecode, running, onTo
 
       <button className="robot-select raised-sm" disabled={busy || running} onClick={onRobotSetup}>Robot setup</button>
       <button className="robot-select raised-sm" disabled={busy || running} onClick={onExamples}>Examples</button>
+      <button className="robot-select raised-sm" disabled={busy} onClick={onDeploy}>Deploy</button>
       <button className="robot-select raised-sm" disabled={busy || running} onClick={() => fileInputRef.current?.click()}>
         <span>Robot:</span> <b>{robot?.name ?? "no URDF loaded"}</b>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

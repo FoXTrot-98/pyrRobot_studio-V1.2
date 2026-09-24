@@ -17,6 +17,10 @@ create a wired simulation project without editing JSON.
 to open a Panda arm, NAO humanoid or KUKA youBot with the original Webots world,
 Studio action controls and Rerun joint telemetry.
 
+**[Robot connection and deployment](docs/ROBOT_DEPLOYMENT.md):** use **Deploy**
+to connect to an authenticated robot agent, check and transfer a project, and
+start/stop its graph or inspect health and logs remotely.
+
 **Current milestone:** a runnable reference robot, versioned project save/load,
 and a UI-independent runtime with headless project validation and execution.
 The [runtime hardening guide](docs/RUNTIME_HARDENING.md) describes typed messages,

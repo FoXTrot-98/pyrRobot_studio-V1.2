@@ -18,6 +18,7 @@ import { StudioNode } from "./components/StudioNode";
 import { SimulationPanel } from "./components/SimulationPanel";
 import { RobotSetupWizard } from "./components/RobotSetupWizard";
 import { WebotsExamples, WebotsModelPanel } from "./components/WebotsExamples";
+import { DeploymentPanel } from "./components/DeploymentPanel";
 import { useGraph, type StudioNodeData } from "./hooks/useGraph";
 import { useBusSocket } from "./hooks/useBusSocket";
 import { api, ApiError } from "./api/client";
@@ -52,6 +53,7 @@ function StudioApp() {
   const [busyStartStop, setBusyStartStop] = useState(false);
   const [showSimulation, setShowSimulation] = useState(true);
   const [showExamples, setShowExamples] = useState(false);
+  const [showDeployment, setShowDeployment] = useState(false);
   const nativeNode = graph.nodes.find(node => node.data.manifest?.id === "pyrobot.sim.webots_model");
   const nativeKeyboard = graph.edges.find(edge => edge.target === nativeNode?.id && edge.targetHandle === "cmd_vel");
   const nativeTeleop = graph.nodes.find(node => node.id === nativeKeyboard?.source && node.data.manifest?.id === "pyrobot.control.keyboard");
@@ -173,7 +175,10 @@ function StudioApp() {
         onOpenProject={openProject}
         onRobotSetup={() => setSetup({name:projectName,positions:Object.fromEntries(graph.nodes.map(n=>[n.id,n.position]))})}
         onExamples={() => setShowExamples(true)}
+        onDeploy={() => setShowDeployment(true)}
       />
+      {showDeployment && <DeploymentPanel onClose={() => setShowDeployment(false)} exportProject={() =>
+        api.exportProject(projectName.trim(), Object.fromEntries(graph.nodes.map(node => [node.id, node.position])))} />}
       {showExamples && <WebotsExamples onClose={() => setShowExamples(false)} onOpen={async id => {
         if (graph.nodes.length && !window.confirm("Replace the current graph with this example? Save your project first to keep it.")) return;
         setProjectBusy(true);
