@@ -1,0 +1,15 @@
+pyzmq>=25.0
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+rerun-sdk>=0.37
+numpy>=1.26
+opencv-python-headless>=4.9
+python-can>=4.3
+pyserial>=3.5
+
+# dev/test only
+httpx>=0.27
+
+# not yet integrated:
+# lcm

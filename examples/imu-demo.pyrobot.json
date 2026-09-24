@@ -1,0 +1,42 @@
+{
+  "format": "pyrobot-project",
+  "schema_version": 1,
+  "name": "IMU demo",
+  "robot_urdf": "<?xml version=\"1.0\"?>\n<robot name=\"sample_bot\">\n  <link name=\"base_link\">\n    <inertial><mass value=\"5.0\"/></inertial>\n    <visual><geometry><mesh filename=\"package://sample_bot/meshes/base.stl\"/></geometry></visual>\n  </link>\n\n  <link name=\"lidar_link\">\n    <inertial><mass value=\"0.3\"/></inertial>\n    <visual><geometry><mesh filename=\"package://sample_bot/meshes/lidar.stl\"/></geometry></visual>\n  </link>\n\n  <link name=\"wheel_left_link\">\n    <inertial><mass value=\"0.5\"/></inertial>\n  </link>\n\n  <joint name=\"base_to_lidar\" type=\"fixed\">\n    <parent link=\"base_link\"/>\n    <child link=\"lidar_link\"/>\n    <origin xyz=\"0.1 0 0.25\" rpy=\"0 0 0\"/>\n  </joint>\n\n  <joint name=\"base_to_wheel_left\" type=\"continuous\">\n    <parent link=\"base_link\"/>\n    <child link=\"wheel_left_link\"/>\n    <origin xyz=\"0 0.2 0\" rpy=\"0 0 0\"/>\n    <axis xyz=\"0 1 0\"/>\n    <limit lower=\"0\" upper=\"0\" effort=\"10\" velocity=\"5\"/>\n  </joint>\n</robot>\n",
+  "nodes": [
+    {
+      "node_id": "imu",
+      "plugin_id": "pyrobot.examples.fake_imu",
+      "plugin_version": "0.1.0",
+      "params": {
+        "rate_hz": 50
+      },
+      "urdf_link": "lidar_link"
+    },
+    {
+      "node_id": "logger",
+      "plugin_id": "pyrobot.examples.logger",
+      "plugin_version": "0.1.0",
+      "params": {},
+      "urdf_link": null
+    }
+  ],
+  "connections": [
+    {
+      "from_node": "imu",
+      "from_port": "imu",
+      "to_node": "logger",
+      "to_port": "in"
+    }
+  ],
+  "positions": {
+    "imu": {
+      "x": 80.0,
+      "y": 100.0
+    },
+    "logger": {
+      "x": 420.0,
+      "y": 100.0
+    }
+  }
+}

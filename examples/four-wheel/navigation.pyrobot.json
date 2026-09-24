@@ -1,0 +1,123 @@
+{
+  "format": "pyrobot-project",
+  "schema_version": 1,
+  "name": "Four-wheel lidar SLAM and navigation",
+  "robot_urdf": "<robot name=\"pyrobot_four_wheel\">\n  <link name=\"base_link\">\n    <visual>\n      <origin xyz=\"0 0 .25\" rpy=\"0 0 0\" />\n      <geometry>\n        <box size=\".72 .48 .22\" />\n      </geometry>\n      <material name=\"base_link_material\">\n        <color rgba=\".12 .42 .78 1\" />\n      </material>\n    </visual>\n    <collision>\n      <origin xyz=\"0 0 .25\" rpy=\"0 0 0\" />\n      <geometry>\n        <box size=\".72 .48 .22\" />\n      </geometry>\n    </collision>\n    <inertial>\n      <origin xyz=\"0 0 .25\" />\n      <mass value=\"8\" />\n      <inertia ixx=\".05\" ixy=\"0\" ixz=\"0\" iyy=\".05\" iyz=\"0\" izz=\".05\" />\n    </inertial>\n  </link>\n  <link name=\"front_left_wheel\">\n    <visual>\n      <origin xyz=\"0 0 0\" rpy=\"1.57079632679 0 0\" />\n      <geometry>\n        <cylinder radius=\".12\" length=\".10\" />\n      </geometry>\n      <material name=\"front_left_wheel_material\">\n        <color rgba=\".12 .14 .17 1\" />\n      </material>\n    </visual>\n    <collision>\n      <origin xyz=\"0 0 0\" rpy=\"1.57079632679 0 0\" />\n      <geometry>\n        <cylinder radius=\".12\" length=\".10\" />\n      </geometry>\n    </collision>\n    <inertial>\n      <origin xyz=\"0 0 0\" />\n      <mass value=\"0.5\" />\n      <inertia ixx=\".05\" ixy=\"0\" ixz=\"0\" iyy=\".05\" iyz=\"0\" izz=\".05\" />\n    </inertial>\n  </link>\n  <joint name=\"front_left_wheel_joint\" type=\"continuous\">\n    <parent link=\"base_link\" />\n    <child link=\"front_left_wheel\" />\n    <origin xyz=\"0.25 0.31 .12\" rpy=\"0 0 0\" />\n    <axis xyz=\"0 1 0\" />\n    <limit effort=\"12\" velocity=\"12\" />\n  </joint>\n  <link name=\"front_left_encoder\" />\n  <joint name=\"front_left_encoder_mount\" type=\"fixed\">\n    <parent link=\"base_link\" />\n    <child link=\"front_left_encoder\" />\n    <origin xyz=\"0.25 0.31 .12\" rpy=\"0 0 0\" />\n  </joint>\n  <link name=\"rear_left_wheel\">\n    <visual>\n      <origin xyz=\"0 0 0\" rpy=\"1.57079632679 0 0\" />\n      <geometry>\n        <cylinder radius=\".12\" length=\".10\" />\n      </geometry>\n      <material name=\"rear_left_wheel_material\">\n        <color rgba=\".12 .14 .17 1\" />\n      </material>\n    </visual>\n    <collision>\n      <origin xyz=\"0 0 0\" rpy=\"1.57079632679 0 0\" />\n      <geometry>\n        <cylinder radius=\".12\" length=\".10\" />\n      </geometry>\n    </collision>\n    <inertial>\n      <origin xyz=\"0 0 0\" />\n      <mass value=\"0.5\" />\n      <inertia ixx=\".05\" ixy=\"0\" ixz=\"0\" iyy=\".05\" iyz=\"0\" izz=\".05\" />\n    </inertial>\n  </link>\n  <joint name=\"rear_left_wheel_joint\" type=\"continuous\">\n    <parent link=\"base_link\" />\n    <child link=\"rear_left_wheel\" />\n    <origin xyz=\"-0.25 0.31 .12\" rpy=\"0 0 0\" />\n    <axis xyz=\"0 1 0\" />\n    <limit effort=\"12\" velocity=\"12\" />\n  </joint>\n  <link name=\"rear_left_encoder\" />\n  <joint name=\"rear_left_encoder_mount\" type=\"fixed\">\n    <parent link=\"base_link\" />\n    <child link=\"rear_left_encoder\" />\n    <origin xyz=\"-0.25 0.31 .12\" rpy=\"0 0 0\" />\n  </joint>\n  <link name=\"front_right_wheel\">\n    <visual>\n      <origin xyz=\"0 0 0\" rpy=\"1.57079632679 0 0\" />\n      <geometry>\n        <cylinder radius=\".12\" length=\".10\" />\n      </geometry>\n      <material name=\"front_right_wheel_material\">\n        <color rgba=\".12 .14 .17 1\" />\n      </material>\n    </visual>\n    <collision>\n      <origin xyz=\"0 0 0\" rpy=\"1.57079632679 0 0\" />\n      <geometry>\n        <cylinder radius=\".12\" length=\".10\" />\n      </geometry>\n    </collision>\n    <inertial>\n      <origin xyz=\"0 0 0\" />\n      <mass value=\"0.5\" />\n      <inertia ixx=\".05\" ixy=\"0\" ixz=\"0\" iyy=\".05\" iyz=\"0\" izz=\".05\" />\n    </inertial>\n  </link>\n  <joint name=\"front_right_wheel_joint\" type=\"continuous\">\n    <parent link=\"base_link\" />\n    <child link=\"front_right_wheel\" />\n    <origin xyz=\"0.25 -0.31 .12\" rpy=\"0 0 0\" />\n    <axis xyz=\"0 1 0\" />\n    <limit effort=\"12\" velocity=\"12\" />\n  </joint>\n  <link name=\"front_right_encoder\" />\n  <joint name=\"front_right_encoder_mount\" type=\"fixed\">\n    <parent link=\"base_link\" />\n    <child link=\"front_right_encoder\" />\n    <origin xyz=\"0.25 -0.31 .12\" rpy=\"0 0 0\" />\n  </joint>\n  <link name=\"rear_right_wheel\">\n    <visual>\n      <origin xyz=\"0 0 0\" rpy=\"1.57079632679 0 0\" />\n      <geometry>\n        <cylinder radius=\".12\" length=\".10\" />\n      </geometry>\n      <material name=\"rear_right_wheel_material\">\n        <color rgba=\".12 .14 .17 1\" />\n      </material>\n    </visual>\n    <collision>\n      <origin xyz=\"0 0 0\" rpy=\"1.57079632679 0 0\" />\n      <geometry>\n        <cylinder radius=\".12\" length=\".10\" />\n      </geometry>\n    </collision>\n    <inertial>\n      <origin xyz=\"0 0 0\" />\n      <mass value=\"0.5\" />\n      <inertia ixx=\".05\" ixy=\"0\" ixz=\"0\" iyy=\".05\" iyz=\"0\" izz=\".05\" />\n    </inertial>\n  </link>\n  <joint name=\"rear_right_wheel_joint\" type=\"continuous\">\n    <parent link=\"base_link\" />\n    <child link=\"rear_right_wheel\" />\n    <origin xyz=\"-0.25 -0.31 .12\" rpy=\"0 0 0\" />\n    <axis xyz=\"0 1 0\" />\n    <limit effort=\"12\" velocity=\"12\" />\n  </joint>\n  <link name=\"rear_right_encoder\" />\n  <joint name=\"rear_right_encoder_mount\" type=\"fixed\">\n    <parent link=\"base_link\" />\n    <child link=\"rear_right_encoder\" />\n    <origin xyz=\"-0.25 -0.31 .12\" rpy=\"0 0 0\" />\n  </joint>\n  <link name=\"lidar_link\">\n    <visual>\n      <origin xyz=\"0 0 0\" rpy=\"0 0 0\" />\n      <geometry>\n        <cylinder radius=\".07\" length=\".06\" />\n      </geometry>\n      <material name=\"lidar_link_material\">\n        <color rgba=\".15 .8 .64 1\" />\n      </material>\n    </visual>\n    <collision>\n      <origin xyz=\"0 0 0\" rpy=\"0 0 0\" />\n      <geometry>\n        <cylinder radius=\".07\" length=\".06\" />\n      </geometry>\n    </collision>\n    <inertial>\n      <origin xyz=\"0 0 0\" />\n      <mass value=\"0.2\" />\n      <inertia ixx=\".05\" ixy=\"0\" ixz=\"0\" iyy=\".05\" iyz=\"0\" izz=\".05\" />\n    </inertial>\n  </link>\n  <joint name=\"lidar_mount\" type=\"fixed\">\n    <parent link=\"base_link\" />\n    <child link=\"lidar_link\" />\n    <origin xyz=\".05 0 .44\" rpy=\"0 0 0\" />\n  </joint>\n  <link name=\"camera_link\">\n    <visual>\n      <origin xyz=\"0 0 0\" rpy=\"0 0 0\" />\n      <geometry>\n        <box size=\".07 .12 .06\" />\n      </geometry>\n      <material name=\"camera_link_material\">\n        <color rgba=\".9 .55 .13 1\" />\n      </material>\n    </visual>\n    <collision>\n      <origin xyz=\"0 0 0\" rpy=\"0 0 0\" />\n      <geometry>\n        <box size=\".07 .12 .06\" />\n      </geometry>\n    </collision>\n    <inertial>\n      <origin xyz=\"0 0 0\" />\n      <mass value=\"0.1\" />\n      <inertia ixx=\".05\" ixy=\"0\" ixz=\"0\" iyy=\".05\" iyz=\"0\" izz=\".05\" />\n    </inertial>\n  </link>\n  <joint name=\"camera_mount\" type=\"fixed\">\n    <parent link=\"base_link\" />\n    <child link=\"camera_link\" />\n    <origin xyz=\".37 0 .34\" rpy=\"0 0 0\" />\n  </joint>\n  <link name=\"camera_optical_frame\" />\n  <joint name=\"camera_optical_mount\" type=\"fixed\">\n    <parent link=\"camera_link\" />\n    <child link=\"camera_optical_frame\" />\n    <origin xyz=\"0 0 0\" rpy=\"-1.57079632679 0 -1.57079632679\" />\n  </joint>\n</robot>",
+  "nodes": [
+    {
+      "node_id": "sim",
+      "plugin_id": "pyrobot.sim.four_wheel",
+      "plugin_version": "0.1.0",
+      "params": {
+        "speed": 1.0,
+        "encoder_bias": 0.01
+      },
+      "urdf_link": "base_link"
+    },
+    {
+      "node_id": "encoders",
+      "plugin_id": "pyrobot.navigation.wheel_odometry",
+      "plugin_version": "0.1.0",
+      "params": {},
+      "urdf_link": null
+    },
+    {
+      "node_id": "slam",
+      "plugin_id": "pyrobot.navigation.lidar_slam",
+      "plugin_version": "0.1.0",
+      "params": {},
+      "urdf_link": null
+    },
+    {
+      "node_id": "nav",
+      "plugin_id": "pyrobot.navigation.astar",
+      "plugin_version": "0.1.0",
+      "params": {
+        "goal_x": 8.0,
+        "goal_y": 6.0,
+        "max_speed": 0.65,
+        "enabled": true
+      },
+      "urdf_link": null
+    },
+    {
+      "node_id": "viewer",
+      "plugin_id": "pyrobot.sim.rerun_view",
+      "plugin_version": "0.1.0",
+      "params": {},
+      "urdf_link": null
+    }
+  ],
+  "connections": [
+    {
+      "from_node": "sim",
+      "from_port": "sensors",
+      "to_node": "encoders",
+      "to_port": "sensors"
+    },
+    {
+      "from_node": "encoders",
+      "from_port": "observation",
+      "to_node": "slam",
+      "to_port": "observation"
+    },
+    {
+      "from_node": "slam",
+      "from_port": "state",
+      "to_node": "nav",
+      "to_port": "state"
+    },
+    {
+      "from_node": "nav",
+      "from_port": "cmd_vel",
+      "to_node": "sim",
+      "to_port": "cmd_vel"
+    },
+    {
+      "from_node": "sim",
+      "from_port": "truth",
+      "to_node": "viewer",
+      "to_port": "truth"
+    },
+    {
+      "from_node": "sim",
+      "from_port": "camera",
+      "to_node": "viewer",
+      "to_port": "camera"
+    },
+    {
+      "from_node": "slam",
+      "from_port": "state",
+      "to_node": "viewer",
+      "to_port": "state"
+    },
+    {
+      "from_node": "nav",
+      "from_port": "path",
+      "to_node": "viewer",
+      "to_port": "path"
+    }
+  ],
+  "positions": {
+    "sim": {
+      "x": 40.0,
+      "y": 80.0
+    },
+    "encoders": {
+      "x": 310.0,
+      "y": 80.0
+    },
+    "slam": {
+      "x": 580.0,
+      "y": 80.0
+    },
+    "nav": {
+      "x": 580.0,
+      "y": 320.0
+    },
+    "viewer": {
+      "x": 850.0,
+      "y": 200.0
+    }
+  }
+}

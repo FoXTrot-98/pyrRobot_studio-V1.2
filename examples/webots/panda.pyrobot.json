@@ -1,0 +1,49 @@
+{
+  "format": "pyrobot-project",
+  "schema_version": 2,
+  "name": "Panda robot arm",
+  "robot_urdf": null,
+  "nodes": [
+    {
+      "node_id": "robot",
+      "plugin_id": "pyrobot.sim.webots_model",
+      "plugin_version": "0.1.0",
+      "params": {
+        "profile": "panda",
+        "action": "hold",
+        "executable": "",
+        "minimize": false
+      }
+    },
+    {
+      "node_id": "viewer",
+      "plugin_id": "pyrobot.sim.webots_model_view",
+      "plugin_version": "0.1.0",
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "from_node": "robot",
+      "from_port": "state",
+      "to_node": "viewer",
+      "to_port": "state"
+    },
+    {
+      "from_node": "robot",
+      "from_port": "camera",
+      "to_node": "viewer",
+      "to_port": "camera"
+    }
+  ],
+  "positions": {
+    "robot": {
+      "x": 350,
+      "y": 160
+    },
+    "viewer": {
+      "x": 650,
+      "y": 160
+    }
+  }
+}
