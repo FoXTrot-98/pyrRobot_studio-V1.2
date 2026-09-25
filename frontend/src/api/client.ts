@@ -2,6 +2,11 @@ import type { GraphState, PluginManifest, RobotInfo } from "../types";
 import type { RobotInspection, SetupDefaults, SetupDraft, SetupSummary } from "../types/setup";
 
 const BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+let studioToken = "";
+export function setStudioToken(token: string) { studioToken = token; }
+export function studioSocketProtocols() {
+  return studioToken ? ["pyrobot", "auth." + btoa(studioToken).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "")] : [];
+}
 
 class ApiError extends Error {
   status: number;
@@ -13,8 +18,9 @@ class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: init?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
     ...init,
+    headers: { ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+      ...(studioToken ? { Authorization: `Bearer ${studioToken}` } : {}), ...init?.headers },
   });
   if (!res.ok) {
     let detail = res.statusText;
@@ -33,6 +39,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  builderCatalog: () => request<{ schemas: Record<string, unknown>; types: string[] }>("/api/plugin-builder/catalog"),
+  builderGenerate: (draft: unknown) => request<{source: string}>("/api/plugin-builder/generate", {method:"POST",body:JSON.stringify(draft)}),
+  builderTest: (source: string, sample: unknown) => request<BuilderTest>("/api/plugin-builder/tests", {method:"POST",body:JSON.stringify({source,sample,trusted:true})}),
+  builderTestStatus: (id: string) => request<BuilderTest>(`/api/plugin-builder/tests/${id}`),
+  builderCancel: (id: string) => request<BuilderTest>(`/api/plugin-builder/tests/${id}`, {method:"DELETE"}),
+  builderInstall: (id: string) => request<{path: string; restart_required: boolean}>(`/api/plugin-builder/tests/${id}/install`, {method:"POST"}),
   listWebotsExamples: () => request<WebotsExample[]>("/api/examples/webots"),
   getWebotsExample: (id: string) => request<unknown>(`/api/examples/webots/${encodeURIComponent(id)}`),
   getSetup: () => request<SetupDefaults>("/api/robot/setup"),
@@ -108,6 +120,7 @@ export interface ProjectInfo {
 }
 
 export interface WebotsExample { id: string; title: string; actions: string[]; world: string }
+export interface BuilderTest { id: string; status: string; result?: {ok: boolean; error?: string; manifest?: PluginManifest; outputs?: unknown[]; logs?: string[]} }
 
 export function busWebSocketUrl(): string {
   const wsBase = BASE_URL.replace(/^http/, "ws");

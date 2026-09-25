@@ -23,6 +23,7 @@ import re
 import threading
 import uuid
 import json
+import time
 from functools import wraps
 from dataclasses import dataclass
 from typing import Optional
@@ -274,6 +275,16 @@ class NodeGraph:
         while not stopped.wait(.05):
             with self._lock:
                 if stopped.is_set():
+                    return
+                transport = self.bus._transport
+                if getattr(transport, '_error', None) is not None or (
+                    hasattr(transport, 'last_progress') and time.monotonic() - transport.last_progress > 2.
+                ):
+                    self.failure_reason = 'Message transport failed or made no progress for 2 seconds'
+                    try:
+                        self.stop()
+                    except Exception:
+                        logger.exception('Transport failure cleanup')
                     return
                 for instance in self.nodes.values():
                     node = instance.node_obj

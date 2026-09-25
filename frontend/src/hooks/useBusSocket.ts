@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { busWebSocketUrl } from "../api/client";
+import { busWebSocketUrl, studioSocketProtocols } from "../api/client";
 import type { BusMessage } from "../types";
 
 /**
@@ -32,7 +32,7 @@ export function useBusSocket() {
 
     function connect() {
       if (cancelled) return;
-      socket = new WebSocket(busWebSocketUrl());
+      socket = new WebSocket(busWebSocketUrl(), studioSocketProtocols());
 
       socket.onopen = () => setConnected(true);
 

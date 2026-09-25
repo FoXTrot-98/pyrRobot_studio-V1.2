@@ -71,7 +71,7 @@ class PluginRegistry:
                     logger.warning("Node subclass %s in %s has no manifest, skipping", obj.__name__, py_file)
                     continue
                 if manifest.id in self._entries:
-                    logger.warning("duplicate plugin id '%s' found in %s, overwriting previous registration", manifest.id, py_file)
+                    raise ValueError(f"Duplicate plugin id '{manifest.id}': {py_file} conflicts with {self._entries[manifest.id].source_path}")
                 self._entries[manifest.id] = PluginEntry(manifest=manifest, node_class=obj, source_path=py_file)
                 newly_registered.append(manifest.id)
                 logger.info("registered plugin '%s' (%s) from %s", manifest.id, manifest.name, py_file.name)

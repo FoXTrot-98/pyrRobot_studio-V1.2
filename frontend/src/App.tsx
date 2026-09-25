@@ -19,9 +19,10 @@ import { SimulationPanel } from "./components/SimulationPanel";
 import { RobotSetupWizard } from "./components/RobotSetupWizard";
 import { WebotsExamples, WebotsModelPanel } from "./components/WebotsExamples";
 import { DeploymentPanel } from "./components/DeploymentPanel";
+import { PluginBuilder } from "./components/PluginBuilder";
 import { useGraph, type StudioNodeData } from "./hooks/useGraph";
 import { useBusSocket } from "./hooks/useBusSocket";
-import { api, ApiError } from "./api/client";
+import { api, ApiError, setStudioToken } from "./api/client";
 import type { RobotInfo } from "./types";
 import { formatTimecode } from "./utils/prt";
 
@@ -54,6 +55,7 @@ function StudioApp() {
   const [showSimulation, setShowSimulation] = useState(true);
   const [showExamples, setShowExamples] = useState(false);
   const [showDeployment, setShowDeployment] = useState(false);
+  const [showPluginBuilder, setShowPluginBuilder] = useState(false);
   const nativeNode = graph.nodes.find(node => node.data.manifest?.id === "pyrobot.sim.webots_model");
   const nativeKeyboard = graph.edges.find(edge => edge.target === nativeNode?.id && edge.targetHandle === "cmd_vel");
   const nativeTeleop = graph.nodes.find(node => node.id === nativeKeyboard?.source && node.data.manifest?.id === "pyrobot.control.keyboard");
@@ -176,7 +178,9 @@ function StudioApp() {
         onRobotSetup={() => setSetup({name:projectName,positions:Object.fromEntries(graph.nodes.map(n=>[n.id,n.position]))})}
         onExamples={() => setShowExamples(true)}
         onDeploy={() => setShowDeployment(true)}
+        onPluginBuilder={() => setShowPluginBuilder(true)}
       />
+      {showPluginBuilder && <PluginBuilder onClose={() => setShowPluginBuilder(false)} />}
       {showDeployment && <DeploymentPanel onClose={() => setShowDeployment(false)} exportProject={() =>
         api.exportProject(projectName.trim(), Object.fromEntries(graph.nodes.map(node => [node.id, node.position])))} />}
       {showExamples && <WebotsExamples onClose={() => setShowExamples(false)} onOpen={async id => {
@@ -283,6 +287,26 @@ function StudioApp() {
 }
 
 export default function App() {
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState("");
+  const [token, setToken] = useState("");
+  const connect = async () => {
+    try { await api.getGraph(); setReady(true); setError(""); }
+    catch (e) { setError(String(e)); }
+  };
+  useEffect(() => {
+    let cancelled = false;
+    api.getGraph().then(() => { if (!cancelled) setReady(true); })
+      .catch(e => { if (!cancelled) setError(String(e)); });
+    return () => { cancelled = true; };
+  }, []);
+  if (!ready) return <main style={{ padding: 32 }}>
+    <h1>Connect to PyRobot Studio</h1>
+    <p>{error || "Connecting…"}</p>
+    <label>Studio token <input type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} /></label>
+    <button onClick={() => { setStudioToken(token.trim()); void connect(); }}>Connect</button>
+    <p>Local development needs no token unless one is configured on the backend. Tokens are kept only in memory.</p>
+  </main>;
   return (
     <ReactFlowProvider>
       <StudioApp />

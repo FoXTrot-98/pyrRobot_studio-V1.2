@@ -39,11 +39,16 @@ from core.runtime.project import ProjectDocument, Position
 from core.simulation.config import RobotConfiguration
 from core.runtime.robot_setup import SetupRequest, inspect_robot, draft_project, revision, EXAMPLE
 from core.simulation.webots_examples import PROFILES, example_project
+from core.runtime.plugin_builder import Builder, Draft, TestRequest, generate
+from core.messages import SCHEMAS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pyrobot.backend")
 
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from .security import StudioSecurity, studio_origins
+import os
 
 @asynccontextmanager
 async def lifespan(app):
@@ -56,6 +61,7 @@ async def lifespan(app):
 
 app = FastAPI(title="PyRobot Studio Backend", lifespan=lifespan)
 runtime = Runtime()
+plugin_builder = Builder()
 
 def serialized(fn):
     @wraps(fn)
@@ -64,13 +70,14 @@ def serialized(fn):
             return fn(*args, **kwargs)
     return wrapped
 
-# The Studio frontend (Vite dev server) runs on a different port than the
-# backend, so the browser needs CORS clearance for both REST calls and the
-# /ws/bus WebSocket. Wide open for local development; tighten before any
-# non-localhost deployment.
+# Explicit browser origins and hosts; local-only unless authenticated access
+# is configured. StudioSecurity also checks WebSocket origins and credentials.
+app.add_middleware(StudioSecurity)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=[h.strip() for h in os.environ.get(
+    'PYROBOT_STUDIO_HOSTS', 'localhost,127.0.0.1,[::1],testserver').split(',')])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=studio_origins(),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,7 +92,47 @@ def startup() -> None:
 
 
 def shutdown():
+    plugin_builder.close()
     runtime.close()
+
+
+@app.get('/api/plugin-builder/catalog')
+def builder_catalog():
+    return {'schemas': {key: value.model_json_schema() for key, value in SCHEMAS.items()},
+            'types': ['json', 'image', 'number', 'string', 'bool', 'pose', 'imu', 'pointcloud']}
+
+
+@app.post('/api/plugin-builder/generate')
+def builder_generate(draft: Draft):
+    try: return {'source': generate(draft)}
+    except (ValueError, GraphError) as exc: raise HTTPException(422, str(exc)) from exc
+
+
+@app.post('/api/plugin-builder/tests')
+def builder_test(request: TestRequest):
+    try: return plugin_builder.start(request)
+    except (ValueError, SyntaxError) as exc: raise HTTPException(422, str(exc)) from exc
+
+
+@app.get('/api/plugin-builder/tests/{test_id}')
+def builder_test_status(test_id: str):
+    try: return plugin_builder.status(test_id)
+    except KeyError as exc: raise HTTPException(404, 'Unknown test') from exc
+
+
+@app.delete('/api/plugin-builder/tests/{test_id}')
+def builder_cancel_test(test_id: str):
+    try: return plugin_builder.cancel(test_id)
+    except KeyError as exc: raise HTTPException(404, 'Unknown test') from exc
+
+
+@app.post('/api/plugin-builder/tests/{test_id}/install')
+@serialized
+def builder_install(test_id: str):
+    if runtime.graph.to_dict()['running']: raise HTTPException(409, 'Stop the graph before installing plugins')
+    try: return plugin_builder.install(test_id, runtime.registry)
+    except KeyError as exc: raise HTTPException(404, 'Unknown test') from exc
+    except (ValueError, FileExistsError) as exc: raise HTTPException(409, str(exc)) from exc
 
 
 @app.get("/api/viz/url")
@@ -362,7 +409,7 @@ async def ws_control(websocket: WebSocket, node_id: str, run_id: str):
         if node is None:
             await websocket.close(code=1008)
             return
-        await websocket.accept()
+        await websocket.accept(subprotocol="pyrobot" if "pyrobot" in websocket.scope.get("subprotocols", []) else None)
         while True:
             packet = await asyncio.wait_for(websocket.receive_json(), timeout=5.)
             if not node._running or node.run_id != run_id:
@@ -381,7 +428,7 @@ async def ws_control(websocket: WebSocket, node_id: str, run_id: str):
 
 @app.websocket("/ws/bus")
 async def ws_bus(websocket: WebSocket):
-    await websocket.accept()
+    await websocket.accept(subprotocol="pyrobot" if "pyrobot" in websocket.scope.get("subprotocols", []) else None)
     loop = asyncio.get_running_loop()
     queue = asyncio.Queue(maxsize=128)
     active = True

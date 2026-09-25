@@ -184,6 +184,7 @@ class ZmqTransport(BusTransport):
         self._stop = threading.Event()
         self._ready = threading.Event()
         self._error = None
+        self.last_progress = time.monotonic()
         self._thread = threading.Thread(target=self._loop, name="pyrobot-bus", daemon=True)
         self._thread.start()
         if not self._ready.wait(5):
@@ -221,6 +222,7 @@ class ZmqTransport(BusTransport):
             patterns = set()
             self._ready.set()
             while not self._stop.is_set():
+                self.last_progress = time.monotonic()
                 with self._lock:
                     callbacks = list(self._callbacks.values())
                 wanted = {pattern for pattern, _ in callbacks}

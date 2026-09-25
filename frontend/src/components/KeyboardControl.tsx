@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { controlWebSocketUrl } from "../api/client";
+import { controlWebSocketUrl, studioSocketProtocols } from "../api/client";
 
 const KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight", "Space"]);
 
@@ -16,7 +16,7 @@ export function KeyboardControl({ nodeId, runId, active }: { nodeId: string; run
 
   useEffect(() => {
     if (!active || !runId) return;
-    const ws = new WebSocket(controlWebSocketUrl(nodeId, runId));
+    const ws = new WebSocket(controlWebSocketUrl(nodeId, runId), studioSocketProtocols());
     socket.current = ws;
     sequence.current = 0;
     ws.onopen = () => setConnected(true);

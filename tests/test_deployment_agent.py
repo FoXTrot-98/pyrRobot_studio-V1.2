@@ -18,8 +18,8 @@ class DeploymentTests(unittest.TestCase):
         for sock in sockets: sock.bind(('127.0.0.1', 0))
         endpoints = ['tcp://127.0.0.1:' + str(sock.getsockname()[1]) for sock in sockets]
         for sock in sockets: sock.close()
-        runtime = Runtime(pub_endpoint=endpoints[0], sub_endpoint=endpoints[1])
-        self.client = TestClient(create_app('test-token-' * 4, self.directory.name, runtime))
+        self.runtime = Runtime(pub_endpoint=endpoints[0], sub_endpoint=endpoints[1])
+        self.client = TestClient(create_app('test-token-' * 4, self.directory.name, self.runtime))
         self.client.__enter__()
         self.headers = {'Authorization': 'Bearer ' + 'test-token-' * 4}
         self.document = ProjectDocument(name='Remote test', robot_urdf='<robot name="test"><link name="base_link"/></robot>', nodes=[{
@@ -76,6 +76,18 @@ class DeploymentTests(unittest.TestCase):
         response = self.client.post('/agent/deploy', content=b'x' * (8 * 1024 * 1024 + 1), headers=self.headers)
         self.assertEqual(response.status_code, 413)
         self.assertEqual(self.status()['revision'], before)
+
+    def test_restart_restores_verified_project_without_starting(self):
+        result = self.post('deploy', self.document)
+        revision = result.json()['revision']
+        self.post('start', {'revision': revision})
+        self.client.__exit__(None, None, None)
+        self.client = TestClient(create_app('test-token-' * 4, self.directory.name, self.runtime))
+        self.client.__enter__()
+        self.assertEqual(self.status()['revision'], revision)
+        self.assertFalse(self.status()['graph']['running'])
+        self.assertEqual(self.status()['project'], 'Remote test')
+        self.assertTrue((Path(self.directory.name) / 'agent.log').is_file())
 
 
 if __name__ == '__main__': unittest.main()

@@ -1,10 +1,11 @@
 """Authenticated deployment agent. Run separately from the Studio backend."""
 import argparse
 from collections import deque
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 import hashlib
 import hmac
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import platform
@@ -13,6 +14,7 @@ import threading
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from .session import Runtime
 from .project import ProjectDocument, prepare_project
 from .__main__ import ValidationTransport
@@ -39,16 +41,54 @@ def create_app(token, directory, runtime=None, origins=None):
     lock = threading.RLock()
     deployed = {'revision': None}
 
+    @contextmanager
+    def operation():
+        if not lock.acquire(timeout=2):
+            raise HTTPException(503, 'Agent is busy or blocked; command was not executed')
+        try: yield
+        finally: lock.release()
+
+    def select_revision(revision):
+        temporary = directory / 'current.tmp'
+        with temporary.open('w', encoding='ascii') as stream:
+            stream.write(revision)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, directory / 'current')
+
     @asynccontextmanager
     async def lifespan(app):
         directory.mkdir(parents=True, exist_ok=True)
+        disk_log = RotatingFileHandler(directory / 'agent.log', maxBytes=2_000_000, backupCount=4, encoding='utf-8')
+        disk_log.setFormatter(log.formatter)
         logging.getLogger().addHandler(log)
+        logging.getLogger().addHandler(disk_log)
         try:
             runtime.open()
+            selected = directory / 'current'
+            if selected.exists():
+                try:
+                    revision = selected.read_text(encoding='ascii').strip()
+                    if len(revision) != 64 or any(c not in '0123456789abcdef' for c in revision):
+                        raise ValueError('Invalid deployment revision pointer')
+                    data = (directory / (revision + '.pyrobot.json')).read_bytes()
+                    if hashlib.sha256(data).hexdigest() != revision:
+                        raise ValueError('Stored project checksum mismatch')
+                    doc = ProjectDocument.model_validate_json(data)
+                    result = check(doc)
+                    if not result['compatible']:
+                        raise ValueError(str(result['diagnostics']))
+                    runtime.load_project(doc)
+                    deployed['revision'] = revision
+                except Exception:
+                    logging.getLogger('pyrobot.agent').exception('Deployment recovery failed; no project will start')
             yield
         finally:
-            runtime.close()
-            logging.getLogger().removeHandler(log)
+            try: runtime.close()
+            finally:
+                logging.getLogger().removeHandler(log)
+                logging.getLogger().removeHandler(disk_log)
+                disk_log.close()
 
     app = FastAPI(title='PyRobot deployment agent', lifespan=lifespan)
 
@@ -85,7 +125,7 @@ def create_app(token, directory, runtime=None, origins=None):
 
     @app.get('/agent/status')
     def status():
-        with lock:
+        with operation():
             return {'protocol': 1, 'hostname': platform.node(), 'os': platform.system(),
                     'architecture': platform.machine(), 'python': platform.python_version(),
                     'project': runtime.name, 'revision': deployed['revision'], 'graph': runtime.graph.to_dict()}
@@ -99,12 +139,17 @@ def create_app(token, directory, runtime=None, origins=None):
     @app.post('/agent/check')
     async def compatibility(request: Request):
         doc = await document(request)
-        with lock: return check(doc)
+        def work():
+            with operation(): return check(doc)
+        return await run_in_threadpool(work)
 
     @app.post('/agent/deploy')
     async def deploy(request: Request):
         doc = await document(request)
-        with lock:
+        return await run_in_threadpool(deploy_document, doc)
+
+    def deploy_document(doc):
+        with operation():
             if runtime.graph.to_dict()['running']:
                 raise HTTPException(409, 'Stop the remote graph before transferring a project')
             result = check(doc)
@@ -113,10 +158,16 @@ def create_app(token, directory, runtime=None, origins=None):
             revision = hashlib.sha256(data).hexdigest()
             destination = directory / (revision + '.pyrobot.json')
             temporary = directory / 'upload.tmp'
+            previous = runtime.export()
             try:
                 temporary.write_bytes(data)
                 os.replace(temporary, destination)
                 runtime.load_project(doc)
+                try:
+                    select_revision(revision)
+                except Exception:
+                    runtime.load_project(previous)
+                    raise
             except Exception as exc:
                 raise HTTPException(400, str(exc)) from exc
             deployed['revision'] = revision
@@ -125,7 +176,7 @@ def create_app(token, directory, runtime=None, origins=None):
 
     @app.post('/agent/start')
     def start(body: dict):
-        with lock:
+        with operation():
             if not deployed['revision'] or body.get('revision') != deployed['revision']:
                 raise HTTPException(409, 'Project revision changed; refresh remote status before starting')
             try: runtime.graph.start()
@@ -135,7 +186,7 @@ def create_app(token, directory, runtime=None, origins=None):
 
     @app.post('/agent/stop')
     def stop():
-        with lock:
+        with operation():
             runtime.graph.stop()
             logging.getLogger('pyrobot.agent').warning('Remote graph stopped')
             return status()

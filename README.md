@@ -21,6 +21,12 @@ Studio action controls and Rerun joint telemetry.
 to connect to an authenticated robot agent, check and transfer a project, and
 start/stop its graph or inspect health and logs remotely.
 
+See [industrial hardening status](docs/INDUSTRIAL_READINESS.md) for security setup,
+implemented safeguards and the remaining production/hardware qualification work.
+
+**[Plugin Builder](docs/PLUGIN_BUILDER.md):** create sensor and processing plugins
+with visual port/settings editors, editable Python, subprocess tests and source-package export.
+
 **Current milestone:** a runnable reference robot, versioned project save/load,
 and a UI-independent runtime with headless project validation and execution.
 The [runtime hardening guide](docs/RUNTIME_HARDENING.md) describes typed messages,

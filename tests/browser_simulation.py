@@ -34,7 +34,8 @@ def main():
     artifacts.mkdir(exist_ok=True)
     environment = dict(os.environ, PYROBOT_BUS_PUB="tcp://127.0.0.1:5575",
         PYROBOT_BUS_SUB="tcp://127.0.0.1:5576", PYROBOT_RERUN_GRPC_PORT="9986",
-        PYROBOT_RERUN_WEB_PORT="9190", VITE_BACKEND_URL="http://127.0.0.1:8011")
+        PYROBOT_RERUN_WEB_PORT="9190", VITE_BACKEND_URL="http://127.0.0.1:8011",
+        PYROBOT_STUDIO_ORIGINS="http://127.0.0.1:5175,http://localhost:5175")
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     processes = []
     try:
