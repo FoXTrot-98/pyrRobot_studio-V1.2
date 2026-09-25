@@ -20,6 +20,8 @@ import { RobotSetupWizard } from "./components/RobotSetupWizard";
 import { WebotsExamples, WebotsModelPanel } from "./components/WebotsExamples";
 import { DeploymentPanel } from "./components/DeploymentPanel";
 import { PluginBuilder } from "./components/PluginBuilder";
+import { RobotModelBuilder } from "./components/RobotModelBuilder";
+import type { RobotBuilderModel } from "./types/modelBuilder";
 import { useGraph, type StudioNodeData } from "./hooks/useGraph";
 import { useBusSocket } from "./hooks/useBusSocket";
 import { api, ApiError, setStudioToken } from "./api/client";
@@ -56,6 +58,8 @@ function StudioApp() {
   const [showExamples, setShowExamples] = useState(false);
   const [showDeployment, setShowDeployment] = useState(false);
   const [showPluginBuilder, setShowPluginBuilder] = useState(false);
+  const [showModelBuilder, setShowModelBuilder] = useState(false);
+  const [builderModel, setBuilderModel] = useState<RobotBuilderModel|null>(null);
   const nativeNode = graph.nodes.find(node => node.data.manifest?.id === "pyrobot.sim.webots_model");
   const nativeKeyboard = graph.edges.find(edge => edge.target === nativeNode?.id && edge.targetHandle === "cmd_vel");
   const nativeTeleop = graph.nodes.find(node => node.id === nativeKeyboard?.source && node.data.manifest?.id === "pyrobot.control.keyboard");
@@ -179,8 +183,10 @@ function StudioApp() {
         onExamples={() => setShowExamples(true)}
         onDeploy={() => setShowDeployment(true)}
         onPluginBuilder={() => setShowPluginBuilder(true)}
+        onModelBuilder={() => setShowModelBuilder(true)}
       />
       {showPluginBuilder && <PluginBuilder onClose={() => setShowPluginBuilder(false)} />}
+      {showModelBuilder && <RobotModelBuilder initial={builderModel} onClose={model=>{setBuilderModel(model);setShowModelBuilder(false);}} />}
       {showDeployment && <DeploymentPanel onClose={() => setShowDeployment(false)} exportProject={() =>
         api.exportProject(projectName.trim(), Object.fromEntries(graph.nodes.map(node => [node.id, node.position])))} />}
       {showExamples && <WebotsExamples onClose={() => setShowExamples(false)} onOpen={async id => {

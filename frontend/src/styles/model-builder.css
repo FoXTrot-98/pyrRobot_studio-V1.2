@@ -1,0 +1,15 @@
+.model-builder { width:min(1440px,96vw); max-height:94vh; overflow:auto; padding:22px; border:1px solid #abb9c8; border-radius:14px; background:#f2f5f9; color:#24364a; }
+.model-builder::backdrop { background:#182a4099; }
+.model-builder header { position:sticky; top:-22px; background:#f2f5f9; z-index:2; display:flex; justify-content:space-between; align-items:center; }
+.model-columns { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr); gap:24px; }
+.model-builder fieldset { padding:12px; border:1px solid #bac6d4; border-radius:8px; margin:12px 0; min-width:0; }
+.model-builder label { display:block; margin:8px 0; }
+.model-builder input:not([type=checkbox]), .model-builder select { padding:6px; width:100%; box-sizing:border-box; background:white; border:1px solid #aebdcc; border-radius:4px; color:#24364a; }
+.model-builder button { padding:8px 12px; margin:5px 8px 5px 0; border:1px solid #aebdcc; border-radius:6px; background:white; color:#24486c; cursor:pointer; }
+.model-builder button:disabled { opacity:.5; cursor:default; }
+.model-import, .model-view-controls, .model-vector { display:flex; gap:12px; flex-wrap:wrap; }
+.model-vector label { flex:1; min-width:70px; }
+.model-parts { max-height:240px; overflow:auto; }
+.model-builder pre { white-space:pre-wrap; max-height:300px; overflow:auto; }
+.model-builder [role=alert] { color:#a52734; }
+@media(max-width:900px) { .model-columns { grid-template-columns:1fr; } }

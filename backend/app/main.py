@@ -41,6 +41,8 @@ from core.runtime.robot_setup import SetupRequest, inspect_robot, draft_project,
 from core.simulation.webots_examples import PROFILES, example_project
 from core.runtime.plugin_builder import Builder, Draft, TestRequest, generate
 from core.messages import SCHEMAS
+from core.urdf.builder import Model as BuilderModel, import_obj, preview as model_preview, bundle as model_bundle
+from fastapi.responses import Response
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pyrobot.backend")
@@ -152,6 +154,48 @@ def list_plugins():
 
 
 # -- robot / URDF ----------------------------------------------------------
+
+class ObjImportRequest(BaseModel):
+    text: str = Field(max_length=4*1024*1024)
+    split: bool = True
+
+
+class ModelPreviewRequest(BaseModel):
+    model: BuilderModel
+    positions: dict[str, float] = Field(default_factory=dict)
+
+
+@app.post('/api/model-builder/import-obj')
+def builder_import_obj(request: ObjImportRequest):
+    try: return import_obj(request.text, request.split).model_dump()
+    except ValueError as exc: raise HTTPException(422, str(exc)) from exc
+
+
+@app.post('/api/model-builder/preview')
+def builder_preview_model(request: ModelPreviewRequest):
+    try: return model_preview(request.model, request.positions)
+    except ValueError as exc: raise HTTPException(422, str(exc)) from exc
+
+
+@app.post('/api/model-builder/document')
+def builder_check_document(model: BuilderModel):
+    return model.model_dump()
+
+
+@app.post('/api/model-builder/export')
+def builder_export_model(model: BuilderModel):
+    try:
+        archive, _, _ = model_bundle(model)
+        return Response(archive, media_type='application/zip', headers={'Content-Disposition':'attachment; filename="robot-model.zip"'})
+    except ValueError as exc: raise HTTPException(422, str(exc)) from exc
+
+
+@app.post('/api/model-builder/validate')
+def builder_validate_model(model: BuilderModel):
+    try:
+        _, xml, warnings = model_bundle(model)
+        return {'urdf':xml, 'warnings':warnings}
+    except ValueError as exc: raise HTTPException(422, str(exc)) from exc
 
 @app.post("/api/robot/urdf")
 async def upload_urdf(file: UploadFile):

@@ -27,6 +27,9 @@ implemented safeguards and the remaining production/hardware qualification work.
 **[Plugin Builder](docs/PLUGIN_BUILDER.md):** create sensor and processing plugins
 with visual port/settings editors, editable Python, subprocess tests and source-package export.
 
+**[Robot Model Builder](docs/ROBOT_MODEL_BUILDER.md):** import OBJ components,
+group links, configure joints, preview motion, calibrate scale and export URDF with mesh assets.
+
 **Current milestone:** a runnable reference robot, versioned project save/load,
 and a UI-independent runtime with headless project validation and execution.
 The [runtime hardening guide](docs/RUNTIME_HARDENING.md) describes typed messages,

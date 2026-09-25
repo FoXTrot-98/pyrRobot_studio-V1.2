@@ -1,5 +1,6 @@
 import type { GraphState, PluginManifest, RobotInfo } from "../types";
 import type { RobotInspection, SetupDefaults, SetupDraft, SetupSummary } from "../types/setup";
+import type { ModelPreview, RobotBuilderModel } from "../types/modelBuilder";
 
 const BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
 let studioToken = "";
@@ -16,7 +17,7 @@ class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, binary = false): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: { ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
@@ -35,10 +36,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(res.status, detail);
   }
-  return res.json() as Promise<T>;
+  return (binary ? res.blob() : res.json()) as Promise<T>;
 }
 
 export const api = {
+  importModelObj: (text:string, split:boolean) => request<RobotBuilderModel>('/api/model-builder/import-obj',{method:'POST',body:JSON.stringify({text,split})}),
+  checkModelDocument: (model:unknown) => request<RobotBuilderModel>('/api/model-builder/document',{method:'POST',body:JSON.stringify(model)}),
+  previewModel: (model:RobotBuilderModel, positions:Record<string,number>) => request<ModelPreview>('/api/model-builder/preview',{method:'POST',body:JSON.stringify({model,positions})}),
+  validateModel: (model:RobotBuilderModel) => request<{urdf:string;warnings:string[]}>('/api/model-builder/validate',{method:'POST',body:JSON.stringify(model)}),
+  exportModel: (model:RobotBuilderModel) => request<Blob>('/api/model-builder/export',{method:'POST',body:JSON.stringify(model)},true),
   builderCatalog: () => request<{ schemas: Record<string, unknown>; types: string[] }>("/api/plugin-builder/catalog"),
   builderGenerate: (draft: unknown) => request<{source: string}>("/api/plugin-builder/generate", {method:"POST",body:JSON.stringify(draft)}),
   builderTest: (source: string, sample: unknown) => request<BuilderTest>("/api/plugin-builder/tests", {method:"POST",body:JSON.stringify({source,sample,trusted:true})}),
