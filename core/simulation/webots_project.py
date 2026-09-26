@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from core.urdf.model import origin_matrix
 from .world import robot_dimensions
+from .mesh_robot import collision_body, mesh_data, wheel_width
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -29,6 +30,42 @@ def vector(values):
 
 def box(size, color="0.35 0.5 0.65"):
     return f"Shape {{ appearance PBRAppearance {{ baseColor {color} roughness 0.8 metalness 0 }} geometry Box {{ size {vector(size)} }} }}"
+
+
+def rotation_text(matrix):
+    rotation, _ = cv2.Rodrigues(np.asarray(matrix,dtype=float))
+    angle = float(np.linalg.norm(rotation))
+    return vector([*(rotation[:,0]/angle),angle]) if angle > 1e-10 else '0 0 1 0'
+
+
+def visual_shape(model,link,frame):
+    geometry = link.visual_geometry
+    kind = geometry.get('type')
+    if not kind: return ''
+    transform = frame @ origin_matrix(link.visual_origin)
+    color = vector(link.color[:3])
+    if kind == 'mesh':
+        vertices, faces, normals, colors = mesh_data(model,link)
+        # Webots IndexedFaceSet has no vertex-color field. Builder components
+        # have constant triangle colors, so material groups preserve them exactly.
+        groups = {}
+        for face in faces:
+            color = tuple(np.mean([colors[v] for v in face],axis=0))
+            groups.setdefault(color,[]).append(face)
+        shapes = []
+        for color, triangles in groups.items():
+            used = sorted({v for face in triangles for v in face})
+            lookup = {v:i for i,v in enumerate(used)}
+            points = ', '.join(vector(vertices[v]) for v in used)
+            indices = ', '.join(' '.join(map(str,[*(lookup[v] for v in f),-1])) for f in triangles)
+            normal_text = ', '.join(vector(normals[v]) for v in used)
+            mesh = f'IndexedFaceSet {{ coord Coordinate {{ point [ {points} ] }} coordIndex [ {indices} ] normal Normal {{ vector [ {normal_text} ] }} normalPerVertex TRUE }}'
+            shapes.append(f'Shape {{ appearance PBRAppearance {{ baseColor {vector(color)} roughness 0.8 metalness 0 }} geometry {mesh} }}')
+        return f'Pose {{ translation {vector(transform[:3,3])} rotation {rotation_text(transform[:3,:3])} children [ {" ".join(shapes)} ] }}'
+    elif kind == 'box': shape = f'Box {{ size {geometry["size"]} }}'
+    elif kind == 'cylinder': shape = f'Cylinder {{ radius {float(geometry["radius"])} height {float(geometry["length"])} subdivision 32 }}'
+    else: raise ValueError(f'{link.name}: unsupported Webots visual {kind}')
+    return f'Pose {{ translation {vector(transform[:3,3])} rotation {rotation_text(transform[:3,:3])} children [ Shape {{ appearance PBRAppearance {{ baseColor {color} roughness 0.8 metalness 0 }} geometry {shape} }} ] }}'
 
 
 def overview_viewpoint(bounds):
@@ -57,28 +94,31 @@ def generate_project(directory, model, config, port, token):
     (controller/"runtime.ini").write_text(f"[python]\nCOMMAND = {sys.executable}\n", encoding="utf-8")
     radius, track, mounts = robot_dimensions(model, config)
     drive = config.drive
-    geometry = model.links[drive.base_frame].visual_geometry
-    if geometry.get("type") != "box":
-        raise ValueError("Webots reference exporter currently requires a box visual on the base frame")
-    body_size = [float(v) for v in geometry["size"].split()]
-    body_origin = model.links[drive.base_frame].visual_origin
-    if not np.allclose(body_origin.rpy, 0):
-        raise ValueError("Webots base box visual must be axis-aligned")
-    children = [f"Pose {{ translation {vector(body_origin.xyz)} children [ {box(body_size)} ] }}"]
+    body_center, body_size = collision_body(model,config)
+    children = []
+    for link_name, link in model.links.items():
+        transform = model.static_transform(drive.base_frame,link_name)
+        if transform is not None:
+            children.append(visual_shape(model,link,np.asarray(transform['matrix'])))
     for name in drive.left_joints + drive.right_joints:
         joint = model.joints[name]
         transform = np.asarray(model.static_transform(drive.base_frame, joint.parent)["matrix"]) @ origin_matrix(joint.origin)
         xyz = vector(transform[:3,3])
-        wheel_geo = model.links[joint.child].visual_geometry
-        width = float(wheel_geo.get("length", .1))
-        wheel_shape = f"Pose {{ rotation 1 0 0 1.570796327 children [ Shape {{ appearance PBRAppearance {{ baseColor 0.08 0.09 0.1 roughness 1 metalness 0 }} geometry Cylinder {{ radius {radius} height {width} subdivision 24 }} }} ] }}"
+        width = wheel_width(model,joint,transform)
+        wheel_shape = []
+        for link_name, link in model.links.items():
+            fixed = model.static_transform(joint.child,link_name)
+            if fixed is not None:
+                wheel_shape.append(visual_shape(model,link,np.asarray(fixed['matrix'])))
+        wheel_shape = ' '.join(wheel_shape)
+        rotation = rotation_text(transform[:3,:3])
         children.append(f'''HingeJoint {{
           jointParameters HingeJointParameters {{ anchor {xyz} axis 0 1 0 dampingConstant 0.02 }}
           device [ RotationalMotor {{ name {json.dumps(name)} maxVelocity 20 maxTorque 8 }}
                    PositionSensor {{ name {json.dumps(name + "_encoder")} }} ]
-          endPoint Solid {{ translation {xyz} name {json.dumps(joint.child)}
+          endPoint Solid {{ translation {xyz} rotation {rotation} name {json.dumps(joint.child)}
             children [ {wheel_shape} ] contactMaterial "wheel"
-            boundingObject Pose {{ rotation 1 0 0 1.570796327 children [ Cylinder {{ radius {radius} height {width} }} ] }}
+            boundingObject Pose {{ rotation {rotation_text(transform[:3,:3].T @ np.array([[1,0,0],[0,0,-1],[0,1,0]]))} children [ Cylinder {{ radius {radius} height {width} }} ] }}
             physics Physics {{ density -1 mass 0.3 }} }} }}''')
     lidar = mounts["lidar_link"]
     camera = mounts["camera_link"]
@@ -107,8 +147,8 @@ Solid {{ translation {(a+c)/2} {(b+d)/2} -0.05 name "floor" contactMaterial "flo
 DEF PYROBOT Robot {{ translation 0 0 0.002 name "PyRobot four wheel" supervisor TRUE
   controller "pyrobot_controller" controllerArgs [ "{port}" "{token}" ]
   children [ {' '.join(children)} ]
-  boundingObject Pose {{ translation {vector(body_origin.xyz)} children [ Box {{ size {vector(body_size)} }} ] }}
-  physics Physics {{ density -1 mass 8 centerOfMass [ {vector(body_origin.xyz)} ] }} }}
+  boundingObject Pose {{ translation {vector(body_center)} children [ Box {{ size {vector(body_size)} }} ] }}
+  physics Physics {{ density -1 mass 8 centerOfMass [ {vector(body_center)} ] }} }}
 '''
     path = worlds/"pyrobot.wbt"
     path.write_text(world, encoding="utf-8")

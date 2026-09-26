@@ -1,5 +1,5 @@
 import type { GraphState, PluginManifest, RobotInfo } from "../types";
-import type { RobotInspection, SetupDefaults, SetupDraft, SetupSummary } from "../types/setup";
+import type { RobotInspection, RobotPackage, SetupDefaults, SetupDraft, SetupSummary } from "../types/setup";
 import type { ModelPreview, RobotBuilderModel } from "../types/modelBuilder";
 
 const BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
@@ -40,6 +40,8 @@ async function request<T>(path: string, init?: RequestInit, binary = false): Pro
 }
 
 export const api = {
+  modelSetup: (model:RobotBuilderModel) => request<RobotPackage>('/api/model-builder/setup',{method:'POST',body:JSON.stringify(model)}),
+  importBuilderBundle: (file:File) => {const form=new FormData();form.append('file',file);return request<RobotPackage>('/api/robot/setup/bundle',{method:'POST',body:form});},
   importModelObj: (text:string, split:boolean) => request<RobotBuilderModel>('/api/model-builder/import-obj',{method:'POST',body:JSON.stringify({text,split})}),
   checkModelDocument: (model:unknown) => request<RobotBuilderModel>('/api/model-builder/document',{method:'POST',body:JSON.stringify(model)}),
   previewModel: (model:RobotBuilderModel, positions:Record<string,number>) => request<ModelPreview>('/api/model-builder/preview',{method:'POST',body:JSON.stringify({model,positions})}),
@@ -54,8 +56,8 @@ export const api = {
   listWebotsExamples: () => request<WebotsExample[]>("/api/examples/webots"),
   getWebotsExample: (id: string) => request<unknown>(`/api/examples/webots/${encodeURIComponent(id)}`),
   getSetup: () => request<SetupDefaults>("/api/robot/setup"),
-  inspectRobot: (robot_urdf: string) => request<RobotInspection>("/api/robot/setup/inspect", {
-    method: "POST", body: JSON.stringify({ robot_urdf }),
+  inspectRobot: (robot_urdf: string, robot_assets:RobotPackage['robot_assets']={}) => request<RobotInspection>("/api/robot/setup/inspect", {
+    method: "POST", body: JSON.stringify({ robot_urdf, robot_assets }),
   }),
   previewSetup: (draft: SetupDraft) => request<SetupSummary>("/api/robot/setup/preview", {
     method: "POST", body: JSON.stringify(draft),

@@ -10,6 +10,7 @@ from sdk.pyrobot_plugin import PluginManifest, PortSpec, PortDataType as T
 from core.simulation.worker import WorkerNode
 from core.simulation.world import sensor_pose
 from core.urdf.model import origin_matrix
+from core.simulation.mesh_robot import mesh_data
 
 
 def cylinder_mesh(radius, length):
@@ -71,6 +72,10 @@ class SimulationRerunView(WorkerNode):
             color = [int(c*255) for c in link.color]
             if geometry["type"] == "box":
                 rr.log(entity, rr.Boxes3D(sizes=[list(map(float, geometry["size"].split()))], colors=color), static=True)
+            elif geometry['type'] == 'mesh':
+                vertices, triangles, normals, colors = mesh_data(self.robot_model,link)
+                rr.log(entity, rr.Mesh3D(vertex_positions=vertices, triangle_indices=triangles,
+                    vertex_normals=normals, vertex_colors=np.rint(np.asarray(colors)*255).astype(np.uint8)), static=True)
             elif geometry["type"] == "cylinder":
                 vertices, triangles = cylinder_mesh(float(geometry["radius"]), float(geometry["length"]))
                 rr.log(entity, rr.Mesh3D(vertex_positions=vertices, triangle_indices=triangles, albedo_factor=color), static=True)

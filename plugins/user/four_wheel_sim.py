@@ -22,6 +22,8 @@ class FourWheelSimulation(Node):
 
     def validate_configuration(self):
         robot_dimensions(self.robot_model, self.robot_config)
+        from core.simulation.mesh_robot import validate_simulation_model
+        validate_simulation_model(self.robot_model, self.robot_config)
         if self.urdf_link != self.robot_config.drive.base_frame:
             raise ValueError("Simulator URDF binding must match configured base_frame")
         if collision(np.zeros(3), self.robot_config.drive.collision_radius, self.robot_config.environment.boxes()):

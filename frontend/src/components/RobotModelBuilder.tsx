@@ -7,7 +7,7 @@ import '../styles/model-builder.css';
 const newLink=(name:string, parent:string|null, parts:string[]=[]):ModelLink=>({name,parent,parts,kind:'fixed',xyz:[0,0,0],rpy:[0,0,0],axis:[0,0,1],lower:-1.57,upper:1.57,effort:1,velocity:1,mass:null,collision:'box'});
 const download=(blob:Blob,name:string)=>{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 
-export function RobotModelBuilder({initial,onClose}:{initial:RobotBuilderModel|null;onClose:(model:RobotBuilderModel|null)=>void}) {
+export function RobotModelBuilder({initial,onClose,onSetup}:{initial:RobotBuilderModel|null;onClose:(model:RobotBuilderModel|null)=>void;onSetup?:(model:RobotBuilderModel)=>Promise<void>}) {
   const dialog=useRef<HTMLDialogElement>(null);
   const [model,setModel]=useState<RobotBuilderModel|null>(initial);
   const [preview,setPreview]=useState<ModelPreview|null>(null);
@@ -108,6 +108,7 @@ export function RobotModelBuilder({initial,onClose}:{initial:RobotBuilderModel|n
         <fieldset disabled={busy}><legend>Save and export</legend><label>Robot name<input aria-label="Robot name" value={model.name} onChange={e=>change({...model,name:e.target.value})}/></label>
           <button onClick={()=>download(new Blob([JSON.stringify(model,null,2)],{type:'application/json'}),'robot-builder.json')}>Save editable model</button>
           <button disabled={!confirmed} onClick={()=>action(async()=>setReport(await api.validateModel(model)))}>Validate URDF</button>
+          {onSetup&&<button disabled={!confirmed} onClick={()=>action(()=>onSetup(model))}>Use in robot setup</button>}
           <button disabled={!confirmed} onClick={()=>action(async()=>download(await api.exportModel(model),'robot-model.zip'))}>Export URDF bundle</button>
           {report&&<><p>URDF generated. Review these limitations before physics use:</p><ul>{report.warnings.map((w,i)=><li key={i}>{w}</li>)}</ul><details><summary>Generated URDF</summary><pre>{report.urdf}</pre></details></>}
           <p>The ZIP includes robot.urdf, STL meshes and the editable model. No hardware control or simulation is started.</p>

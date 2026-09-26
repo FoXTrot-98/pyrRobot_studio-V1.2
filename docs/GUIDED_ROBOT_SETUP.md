@@ -5,8 +5,8 @@ Restart the backend after installing this update, refresh Studio, and click
 
 1. **Robot model:** use the included sample or choose a `.urdf` file. The wizard
    previews box/cylinder visuals at zero joint positions. Rotate the view using
-   the slider. Other visual types appear as frame markers; mesh assets are not
-   loaded by this preview. An existing robot is loaded into the draft automatically.
+   the slider. Builder meshes use a smooth 3D preview. Open the builder ZIP or use
+   **Use in robot setup** from Model Builder to include its meshes. An existing robot is loaded into the draft automatically.
 2. **Drive:** confirm the base frame and the two wheel joints on each side.
    Suggestions use wheel geometry, positions and names, so check them carefully.
    Set encoder resolution, robot clearance and planning clearance. Leave the
@@ -37,11 +37,11 @@ configuration and embedded URDF.
 - Four-wheel differential drive, two wheels per side, equal radii and wheel joint
   axes along base +Y.
 - Fixed, level camera and lidar mounts.
-- For Webots, an axis-aligned box body and the installed Webots executable.
+- For Webots, supported box/cylinder or embedded builder visuals and the installed Webots executable. Custom bodies use a bounding-box collision approximation.
 - One connected URDF tree. Export Xacro to URDF before using the wizard.
 
 Physical sensor connections, other drive layouts, editable sensor mounting
-positions, mesh rendering and generic URDF physics import remain future work.
+positions and generic URDF physics import remain future work. Embedded builder meshes now work in setup and simulation; see [Model to simulation](MODEL_TO_SIMULATION.md).
 The wizard configures the existing supported runtime; it does not make arbitrary
 robot descriptions automatically simulatable.
 

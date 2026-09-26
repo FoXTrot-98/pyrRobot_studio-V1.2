@@ -1,5 +1,6 @@
 """Optional OBJ-to-URDF browser workflow; no simulator or hardware is started."""
 import io
+import json
 import os
 import re
 import subprocess
@@ -80,9 +81,49 @@ def main():
                 page.screenshot(path=str(artifacts / 'robot-model-builder.png'))
                 dialog.get_by_role('button', name='Close', exact=True).click()
                 assert page.request.get('http://127.0.0.1:8022/api/project').json() == before
+                # Continue directly from a complete builder robot into setup.
+                page.get_by_role('button', name='Model Builder', exact=True).click()
+                dialog.get_by_label('Open editable model', exact=True).set_input_files(ROOT/'examples/model-builder/four-wheel-rover.robot-builder.json')
+                dialog.get_by_role('checkbox', name='I checked scale and the root frame orientation (+X forward, +Z up)', exact=True).check()
+                with page.expect_download() as pending:
+                    dialog.get_by_role('button',name='Export URDF bundle',exact=True).click()
+                mesh_zip=artifacts/'mesh-rover.zip';pending.value.save_as(mesh_zip)
+                dialog.get_by_role('button',name='Use in robot setup',exact=True).click()
+                setup=page.get_by_role('dialog',name='Set up your robot')
+                setup.get_by_text('Embedded robot meshes · dimensions in metres',exact=True).wait_for()
+                page.screenshot(path=str(artifacts/'mesh-robot-setup.png'))
+                setup.get_by_role('button',name='Cancel',exact=True).click()
+                assert page.request.get('http://127.0.0.1:8022/api/project').json()==before
+                # A saved builder ZIP provides the same geometry without extraction.
+                page.get_by_role('button',name='Robot setup',exact=True).click()
+                setup.get_by_label('Model Builder ZIP',exact=True).set_input_files(mesh_zip)
+                setup.get_by_text('Embedded robot meshes · dimensions in metres',exact=True).wait_for()
+                setup.get_by_role('button',name='Next',exact=True).click()
+                setup.get_by_label('Wheel radius override (m)',exact=True).fill('0.12')
+                setup.get_by_role('button',name='Next',exact=True).click()
+                setup.get_by_role('button',name='Next',exact=True).click()
+                setup.get_by_role('button',name='Check setup',exact=True).click()
+                setup.get_by_text('Setup checked',exact=True).wait_for()
+                setup.get_by_role('button',name='Apply robot setup',exact=True).click()
+                setup.wait_for(state='detached')
+                page.get_by_role('button',name='Start Graph',exact=True).click()
+                page.get_by_role('button',name='Stop Graph',exact=True).wait_for()
+                page.wait_for_timeout(1500)
+                state=page.request.get('http://127.0.0.1:8022/api/graph').json()
+                assert state['running'] and not [n for n in state['nodes'] if n['error']],state
+                page.get_by_role('button',name='Stop Graph',exact=True).click()
+                page.get_by_role('button',name='Start Graph',exact=True).wait_for()
+                with page.expect_download() as pending:
+                    page.get_by_role('button',name='Save project',exact=True).click()
+                project_file=artifacts/'mesh-rover.pyrobot.json';pending.value.save_as(project_file)
+                project=json.loads(project_file.read_text())
+                assert project['schema_version']==3 and len(project['robot_assets'])==7
+                page.get_by_role('button',name='Robot setup',exact=True).click()
+                setup.get_by_text('Embedded robot meshes · dimensions in metres',exact=True).wait_for()
+                setup.get_by_role('button',name='Cancel',exact=True).click()
                 assert not errors, errors
                 browser.close()
-                print('PASS: OBJ import, component grouping, joint pivot/limits/motion, URDF+meshes export and editable-model reopen; live project unchanged', flush=True)
+                print('PASS: OBJ editing/export, direct setup handoff, cancellation, builder ZIP import, mesh simulation startup and embedded project save', flush=True)
     finally:
         for process in reversed(processes):
             if process.poll() is None: process.terminate()

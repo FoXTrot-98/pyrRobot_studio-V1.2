@@ -22,6 +22,7 @@ import { DeploymentPanel } from "./components/DeploymentPanel";
 import { PluginBuilder } from "./components/PluginBuilder";
 import { RobotModelBuilder } from "./components/RobotModelBuilder";
 import type { RobotBuilderModel } from "./types/modelBuilder";
+import type { RobotPackage } from './types/setup';
 import { useGraph, type StudioNodeData } from "./hooks/useGraph";
 import { useBusSocket } from "./hooks/useBusSocket";
 import { api, ApiError, setStudioToken } from "./api/client";
@@ -63,7 +64,7 @@ function StudioApp() {
   const nativeNode = graph.nodes.find(node => node.data.manifest?.id === "pyrobot.sim.webots_model");
   const nativeKeyboard = graph.edges.find(edge => edge.target === nativeNode?.id && edge.targetHandle === "cmd_vel");
   const nativeTeleop = graph.nodes.find(node => node.id === nativeKeyboard?.source && node.data.manifest?.id === "pyrobot.control.keyboard");
-  const [setup, setSetup] = useState<{ name: string; positions: Record<string, {x:number;y:number}> } | null>(null);
+  const [setup, setSetup] = useState<{ name: string; positions: Record<string, {x:number;y:number}>; initial?:RobotPackage } | null>(null);
   const navigationNode = graph.nodes.find((node) => node.data.manifest?.id === "pyrobot.navigation.astar");
   const teleopNode = graph.nodes.find((node) => node.data.manifest?.id === "pyrobot.control.keyboard");
   const selectorNode = graph.nodes.find((node) => node.data.manifest?.id === "pyrobot.control.selector");
@@ -86,7 +87,7 @@ function StudioApp() {
     try {
       const positions = Object.fromEntries(graph.nodes.map((n) => [n.id, n.position]));
       const document = await api.exportProject(projectName.trim(), positions);
-      const url = URL.createObjectURL(new Blob([JSON.stringify(document, null, 2)], { type: "application/json" }));
+      const url = URL.createObjectURL(new Blob([JSON.stringify(document)], { type: "application/json" }));
       const anchor = window.document.createElement("a");
       anchor.href = url;
       anchor.download = `${projectName.replace(/[^a-z0-9_-]/gi, "_") || "robot"}.pyrobot.json`;
@@ -186,7 +187,11 @@ function StudioApp() {
         onModelBuilder={() => setShowModelBuilder(true)}
       />
       {showPluginBuilder && <PluginBuilder onClose={() => setShowPluginBuilder(false)} />}
-      {showModelBuilder && <RobotModelBuilder initial={builderModel} onClose={model=>{setBuilderModel(model);setShowModelBuilder(false);}} />}
+      {showModelBuilder && <RobotModelBuilder initial={builderModel} onClose={model=>{setBuilderModel(model);setShowModelBuilder(false);}} onSetup={async model=>{
+        const initial=await api.modelSetup(model);
+        setBuilderModel(model);setShowModelBuilder(false);
+        setSetup({name:model.name,positions:Object.fromEntries(graph.nodes.map(n=>[n.id,n.position])),initial});
+      }} />}
       {showDeployment && <DeploymentPanel onClose={() => setShowDeployment(false)} exportProject={() =>
         api.exportProject(projectName.trim(), Object.fromEntries(graph.nodes.map(node => [node.id, node.position])))} />}
       {showExamples && <WebotsExamples onClose={() => setShowExamples(false)} onOpen={async id => {
@@ -198,7 +203,7 @@ function StudioApp() {
           await graph.refreshFromBackend(info.positions);
         } finally { setProjectBusy(false); }
       }} />}
-      {setup && <RobotSetupWizard projectName={setup.name} positions={setup.positions} onClose={()=>setSetup(null)}
+      {setup && <RobotSetupWizard projectName={setup.name} positions={setup.positions} initialModel={setup.initial} onClose={()=>setSetup(null)}
         onApplied={async info => {
           setProjectName(info.name); setRobot(info.robot); setSelectedNodeId(null); graph.dismissError();
           setToast("Robot setup applied. Start Graph to run; Save project to keep your changes.");

@@ -32,6 +32,8 @@ class WebotsSimulation(Node):
 
     def validate_configuration(self):
         robot_dimensions(self.robot_model, self.robot_config)
+        from core.simulation.mesh_robot import collision_body
+        collision_body(self.robot_model, self.robot_config)
         if self.urdf_link != self.robot_config.drive.base_frame:
             raise ValueError("Bind Webots to the configured base frame")
         if not find_webots(self.get_param("executable", "")):

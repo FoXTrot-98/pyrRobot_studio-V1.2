@@ -4,7 +4,7 @@ Studio's **Deploy** screen connects to a separate PyRobot agent. It checks a sna
 
 ## Prepare the robot
 
-Install this same project revision and its Python requirements on the robot computer. Its plugins, device drivers, external model files and simulation assets must be installed there. Project transfer sends JSON with embedded URDF, graph, parameters and layout, not Python code, dependencies or external assets. Different operating systems may need different serial ports and file paths in node settings.
+Install this same project revision and its Python requirements on the robot computer. Its plugins, device drivers, external model files and simulation assets must be installed there. Project transfer sends JSON with embedded URDF, graph, parameters and layout. Version 3 projects also carry embedded Model Builder meshes, colors and normals. Python code, dependencies and other external assets are not transferred; both installations must support version 3 to use embedded meshes. Different operating systems may need different serial ports and file paths in node settings.
 
 From the project root, activate its virtual environment and create a random token:
 

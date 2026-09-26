@@ -1,3 +1,8 @@
+import type { Vector3 } from './modelBuilder';
+export interface RobotPackage {
+  robot_urdf: string;
+  robot_assets: Record<string,{vertices:Vector3[];faces:number[][];normals:Vector3[];colors:Vector3[]}>;
+}
 export interface RobotConfiguration {
   drive: {
     type: "four_wheel_differential";
@@ -17,13 +22,14 @@ export interface RobotConfiguration {
 export interface RobotInspection {
   name: string;
   root: string;
-  links: { name: string; xyz: number[]; vertices: number[][]; faces: number[][] }[];
+  links: { name: string; xyz: number[]; vertices: number[][]; faces: number[][]; normals?:Vector3[]|null; colors?:Vector3[]|null }[];
   joints: { name: string; type: string; parent: string; child: string }[];
   suggested_config: RobotConfiguration;
   warnings: string[];
 }
 
 export interface SetupDefaults {
+  robot_assets: RobotPackage['robot_assets'];
   robot_urdf: string | null;
   reference_urdf: string;
   robot_config: RobotConfiguration;
@@ -33,6 +39,7 @@ export interface SetupDefaults {
 }
 
 export interface SetupDraft {
+  robot_assets?: RobotPackage['robot_assets'];
   robot_urdf: string;
   robot_config: RobotConfiguration;
   name: string;

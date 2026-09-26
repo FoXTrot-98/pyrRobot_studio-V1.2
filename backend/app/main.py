@@ -42,6 +42,7 @@ from core.simulation.webots_examples import PROFILES, example_project
 from core.runtime.plugin_builder import Builder, Draft, TestRequest, generate
 from core.messages import SCHEMAS
 from core.urdf.builder import Model as BuilderModel, import_obj, preview as model_preview, bundle as model_bundle
+from core.urdf.assets import Assets, builder_package, read_builder_bundle
 from fastapi.responses import Response
 
 logging.basicConfig(level=logging.INFO)
@@ -197,6 +198,19 @@ def builder_validate_model(model: BuilderModel):
         return {'urdf':xml, 'warnings':warnings}
     except ValueError as exc: raise HTTPException(422, str(exc)) from exc
 
+
+@app.post('/api/model-builder/setup')
+def builder_setup_package(model: BuilderModel):
+    try: return builder_package(model)
+    except ValueError as exc: raise HTTPException(422, str(exc)) from exc
+
+
+@app.post('/api/robot/setup/bundle')
+async def inspect_builder_bundle(file: UploadFile):
+    data = await file.read(8*1024*1024+1)
+    try: return read_builder_bundle(data)
+    except ValueError as exc: raise HTTPException(422, str(exc)) from exc
+
 @app.post("/api/robot/urdf")
 async def upload_urdf(file: UploadFile):
     suffix = Path(file.filename or "").suffix.lower()
@@ -233,12 +247,14 @@ def get_robot_links():
 
 class InspectRobotRequest(BaseModel):
     robot_urdf: str = Field(min_length=1, max_length=4*1024*1024)
+    robot_assets: Assets = Field(default_factory=dict)
 
 
 @app.get("/api/robot/setup")
 @serialized
 def robot_setup_defaults():
     return {"robot_urdf": runtime.robot_xml, "robot_config": runtime.graph.robot_config.model_dump(),
+            "robot_assets": {k:v.model_dump() for k,v in runtime.robot.assets.items()} if runtime.robot else {},
             "name": runtime.name, "revision": revision(runtime), "node_count": len(runtime.graph.nodes),
             "reference_urdf": (EXAMPLE/"robot.urdf").read_text(encoding="utf-8")}
 
@@ -257,7 +273,7 @@ def webots_example(profile: str):
 @app.post("/api/robot/setup/inspect")
 def inspect_setup_robot(request: InspectRobotRequest):
     try:
-        return inspect_robot(request.robot_urdf)
+        return inspect_robot(request.robot_urdf, request.robot_assets)
     except Exception as exc:
         raise HTTPException(400, f"Cannot preview this URDF: {exc}") from exc
 

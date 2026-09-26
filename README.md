@@ -30,6 +30,11 @@ with visual port/settings editors, editable Python, subprocess tests and source-
 **[Robot Model Builder](docs/ROBOT_MODEL_BUILDER.md):** import OBJ components,
 group links, configure joints, preview motion, calibrate scale and export URDF with mesh assets.
 
+**[Model to simulation](docs/MODEL_TO_SIMULATION.md):** send a supported four-wheel
+builder robot directly into guided setup, or open its exported ZIP. Preserve its
+visual meshes and component colors in Rerun/Webots and save embedded meshes with
+the project, without manually moving mesh files.
+
 **Current milestone:** a runnable reference robot, versioned project save/load,
 and a UI-independent runtime with headless project validation and execution.
 The [runtime hardening guide](docs/RUNTIME_HARDENING.md) describes typed messages,

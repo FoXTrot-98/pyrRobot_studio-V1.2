@@ -1,8 +1,18 @@
 import { useState } from "react";
 import type { RobotInspection, RobotConfiguration } from "../types/setup";
+import { ModelViewport } from './ModelViewport';
+import type { ModelPreview, Vector3 } from '../types/modelBuilder';
 
 export function RobotSetupPreview({ robot, drive }: { robot: RobotInspection; drive: RobotConfiguration["drive"] }) {
   const [angle, setAngle] = useState(35);
+  if(robot.links.some(l=>l.colors)){
+    const preview:ModelPreview={parts:robot.links.filter(l=>l.faces.length).map(l=>{
+      const faces=l.faces.flatMap(f=>Array.from({length:f.length-2},(_,i)=>[f[0],f[i+1],f[i+2]]));
+      return {id:l.name,name:l.name,link:l.name,vertices:l.vertices as Vector3[],faces,colors:l.colors,
+        normals:l.normals?faces.map(f=>f.map(v=>l.normals![v])):undefined};
+    }),frames:robot.links.filter(l=>[drive.base_frame,drive.lidar_frame,drive.camera_frame].includes(l.name)).map(l=>({name:l.name,xyz:l.xyz as Vector3,axis:[0,0,1]}))};
+    return <div className="setup-preview" aria-label="Robot URDF preview"><ModelViewport preview={preview} selected={[]}/><p>Embedded robot meshes · dimensions in metres</p></div>;
+  }
   const yaw = angle*Math.PI/180;
   const project = (p: number[]) => [
     p[0]*Math.cos(yaw)-p[1]*Math.sin(yaw),

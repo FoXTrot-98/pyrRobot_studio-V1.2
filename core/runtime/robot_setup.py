@@ -13,6 +13,7 @@ from core.simulation.config import RobotConfiguration
 from core.simulation.world import robot_dimensions
 from .project import ProjectDocument, Position, export_project, prepare_project
 from .graph import GraphError
+from core.urdf.assets import Assets, attach_assets
 
 EXAMPLE = Path(__file__).resolve().parents[2]/'examples/four-wheel'
 
@@ -25,11 +26,13 @@ class SetupRequest(BaseModel):
     target: Literal['configure', 'builtin', 'webots']
     revision: str
     positions: dict[str, Position] = Field(default_factory=dict)
+    robot_assets: Assets = Field(default_factory=dict)
 
 
 def revision(runtime):
     state = {'graph': runtime.graph.to_dict(), 'xml': runtime.robot_xml,
-             'config': runtime.graph.robot_config.model_dump(), 'name': runtime.name}
+             'config': runtime.graph.robot_config.model_dump(), 'name': runtime.name,
+             'assets': {k:v.model_dump() for k,v in runtime.robot.assets.items()} if runtime.robot else {}}
     # Health and execution identity do not change the editable configuration.
     state['graph'] = {key: state['graph'][key] for key in ('nodes', 'connections')}
     for node in state['graph']['nodes']:
@@ -68,8 +71,9 @@ def checked_model(xml):
     return model, next(iter(roots))
 
 
-def inspect_robot(xml):
+def inspect_robot(xml, assets=None):
     model, root = checked_model(xml)
+    attach_assets(model, assets or {})
     transforms = {}
     links, warnings = [], []
     for name, link in model.links.items():
@@ -79,6 +83,7 @@ def inspect_robot(xml):
         visual = matrix @ origin_matrix(link.visual_origin)
         shape = link.visual_geometry
         vertices, faces = [], []
+        normals, colors = None, None
         if shape.get('type') == 'box':
             size = np.array([float(v) for v in shape['size'].split()])
             if len(size) != 3 or not np.all(np.isfinite(size)) or np.any(size <= 0):
@@ -92,11 +97,22 @@ def inspect_robot(xml):
                 raise ValueError(f'Link {name} needs positive cylinder dimensions')
             vertices = [[radius*math.cos(i*math.pi/6),radius*math.sin(i*math.pi/6),z] for z in (-length/2,length/2) for i in range(12)]
             faces = [list(range(12)),list(range(12,24))]+[[i,(i+1)%12,(i+1)%12+12,i+12] for i in range(12)]
+        elif shape.get('type') == 'mesh' and link.visual_mesh in model.assets:
+            asset = model.assets[link.visual_mesh]
+            scale = np.array([float(v) for v in shape.get('scale','1 1 1').split()])
+            if scale.shape != (3,) or not np.all(np.isfinite(scale)) or np.any(scale <= 0):
+                raise ValueError('Mesh scale must have three positive finite values')
+            vertices, faces = np.asarray(asset.vertices)*scale, asset.faces
+            n = np.asarray(asset.normals)/scale
+            n /= np.linalg.norm(n,axis=1)[:,None]
+            normals = (n @ visual[:3,:3].T).tolist()
+            colors = asset.colors
         elif shape:
             warnings.append(f'{name}: {shape.get("type")} visual shown as a frame marker in this preview.')
         if len(vertices):
             vertices = (np.asarray(vertices) @ visual[:3,:3].T+visual[:3,3]).tolist()
-        links.append({'name':name, 'xyz':matrix[:3,3].tolist(), 'vertices':vertices, 'faces':faces})
+        links.append({'name':name, 'xyz':matrix[:3,3].tolist(), 'vertices':vertices, 'faces':faces,
+                      'normals':normals,'colors':colors})
     config = RobotConfiguration().model_dump()
     drive = config['drive']
     drive['base_frame'] = 'base_link' if 'base_link' in model.links else root
@@ -121,7 +137,10 @@ def draft_project(runtime, request):
     if runtime.graph.to_dict()['running']: raise GraphError('Stop the graph before applying robot setup')
     if request.revision != revision(runtime): raise GraphError('The project changed while setup was open. Close and reopen Robot setup to review the latest project.')
     model, _ = checked_model(request.robot_urdf)
+    attach_assets(model, request.robot_assets)
     radius, track, mounts = robot_dimensions(model, request.robot_config)
+    from core.simulation.mesh_robot import validate_simulation_model
+    validate_simulation_model(model, request.robot_config)
     if request.target == 'configure':
         document = export_project(runtime.graph, runtime.registry, request.name, request.robot_urdf,
                                   {k:v.model_dump() for k,v in request.positions.items()})
@@ -133,13 +152,14 @@ def draft_project(runtime, request):
         for node in document.nodes:
             node.plugin_version = runtime.registry.get(node.plugin_id).manifest.version
             if node.plugin_id == 'pyrobot.navigation.astar': node.params.update(goal_x=0., goal_y=0., enabled=False, waypoints=[])
+    document.robot_assets = request.robot_assets
+    document.schema_version = 3 if request.robot_assets else 2
     for node in document.nodes:
         if node.plugin_id in ('pyrobot.sim.webots','pyrobot.sim.four_wheel'):
             node.urdf_link = request.robot_config.drive.base_frame
         if node.plugin_id == 'pyrobot.sim.webots':
-            link = model.links[request.robot_config.drive.base_frame]
-            if link.visual_geometry.get('type') != 'box' or not np.allclose(link.visual_origin.rpy, 0):
-                raise ValueError('Webots currently requires an axis-aligned box visual on the base frame')
+            from core.simulation.mesh_robot import collision_body
+            collision_body(model, request.robot_config)
     candidate, _ = prepare_project(document, runtime.bus, runtime.registry)
     try:
         # Configuration errors are blockers; unfinished wiring is allowed when
@@ -152,4 +172,5 @@ def draft_project(runtime, request):
         candidate.close()
     return document, {'wheel_radius':radius,'track':track,'mounts':mounts,
                       'node_count':len(document.nodes),'connection_count':len(document.connections),
-                      'warnings':[item['message'] for item in diagnostics]}
+                      'warnings':[item['message'] for item in diagnostics] +
+                          (['Custom visuals are preserved. Simulation uses a body box, cylindrical wheel collisions, and approximate mass properties.'] if request.robot_assets else [])}

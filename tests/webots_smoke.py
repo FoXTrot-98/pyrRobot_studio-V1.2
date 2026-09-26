@@ -21,6 +21,12 @@ from core.runtime.project import ProjectDocument
 
 def main():
     doc = ProjectDocument.model_validate_json((ROOT/"examples/four-wheel/webots.pyrobot.json").read_text())
+    if '--mesh' in sys.argv:
+        from core.urdf.builder import Model
+        from core.urdf.assets import builder_package
+        package=builder_package(Model.model_validate_json((ROOT/'examples/model-builder/four-wheel-rover.robot-builder.json').read_text()))
+        doc=ProjectDocument.model_validate({**doc.model_dump(),**package,'schema_version':3})
+        doc.robot_config.drive.wheel_radius=.12
     for node in doc.nodes:
         if node.node_id == "sim": node.params["minimize"] = True
     with Runtime() as runtime:

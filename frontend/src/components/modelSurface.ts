@@ -56,7 +56,7 @@ export function drawSurface(canvas:HTMLCanvasElement, parts:ModelPart[], selecte
       part.faces.forEach((face,i)=>{
         const corners=face.map((v,c)=>{
           const p=screen(part.vertices[v]),n=rotate(normals[i][c]);
-          return [p[0]/400-1,1-p[1]/250,-p[2]/(depth*1.01),n[0],-n[1],n[2],...color];
+          return [p[0]/400-1,1-p[1]/250,-p[2]/(depth*1.01),n[0],-n[1],n[2],...(selected.includes(part.id)?color:part.colors?.[v]??color)];
         });
         corners.forEach(c=>data.push(...c));
         if(wireframe)for(let c=0;c<3;c++)edges.push(...corners[c],...corners[(c+1)%3]);

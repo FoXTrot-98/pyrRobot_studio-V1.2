@@ -57,6 +57,7 @@ class RobotModel:
     name: str
     links: dict[str, Link] = field(default_factory=dict)
     joints: dict[str, Joint] = field(default_factory=dict)
+    assets: dict = field(default_factory=dict)
 
     def link_names(self) -> list[str]:
         return sorted(self.links.keys())

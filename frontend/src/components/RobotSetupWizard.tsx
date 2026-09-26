@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type ProjectInfo } from "../api/client";
-import type { RobotConfiguration, RobotInspection, SetupDefaults, SetupDraft, SetupSummary } from "../types/setup";
+import type { RobotConfiguration, RobotInspection, RobotPackage, SetupDefaults, SetupDraft, SetupSummary } from "../types/setup";
 import { RobotSetupPreview } from "./RobotSetupPreview";
 import "../styles/robot-setup.css";
 
 const STEPS = ["Robot model", "Drive", "Sensors", "Review"];
-export function RobotSetupWizard({ projectName, positions, onClose, onApplied }: {
+export function RobotSetupWizard({ projectName, positions, initialModel, onClose, onApplied }: {
+  initialModel?:RobotPackage;
   projectName: string; positions: SetupDraft["positions"];
   onClose: () => void; onApplied: (info: ProjectInfo) => Promise<void>;
 }) {
@@ -25,24 +26,25 @@ export function RobotSetupWizard({ projectName, positions, onClose, onApplied }:
     api.getSetup().then(async initial => {
       if (!active) return;
       setDefaults(initial);
-      if (initial.robot_urdf) {
-        const inspected = await api.inspectRobot(initial.robot_urdf);
+      const source=initialModel??initial;
+      if (source.robot_urdf) {
+        const inspected = await api.inspectRobot(source.robot_urdf,source.robot_assets);
         if (!active) return;
         setRobot(inspected);
-        setDraft({ robot_urdf:initial.robot_urdf, robot_config:initial.robot_config, name:projectName,
+        setDraft({ robot_urdf:source.robot_urdf, robot_assets:source.robot_assets, robot_config:initialModel?inspected.suggested_config:initial.robot_config, name:projectName,
           target:initial.node_count ? "configure" : "builtin", revision:initial.revision, positions });
       }
     }).catch(e => { if (active) setError(String(e)); }).finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [projectName, positions]);
+  }, [projectName, positions,initialModel]);
 
-  const inspect = async (xml: string) => {
+  const inspect = async (xml: string, assets:RobotPackage['robot_assets']={}) => {
     if (!defaults) return;
     setBusy(true); setError(null); setSummary(null);
     try {
-      const inspected = await api.inspectRobot(xml);
+      const inspected = await api.inspectRobot(xml,assets);
       setRobot(inspected);
-      setDraft({ robot_urdf:xml, robot_config:inspected.suggested_config,
+      setDraft({ robot_urdf:xml, robot_assets:assets, robot_config:inspected.suggested_config,
         name:projectName === "Untitled robot" ? inspected.name : projectName,
         target:defaults.node_count ? "configure" : "builtin", revision:defaults.revision, positions });
     } catch (e) { setError(String(e)); }
@@ -81,8 +83,14 @@ export function RobotSetupWizard({ projectName, positions, onClose, onApplied }:
     <nav aria-label="Setup progress">{STEPS.map((title,i) => <span key={title} aria-current={step===i ? "step" : undefined} className={step===i ? "current" : ""}>{i+1}. {title}</span>)}</nav>
     <div className="setup-body" aria-busy={busy}>
       <section className="setup-fields">
-        {step === 0 && <><h3>Choose your robot model</h3><p>Import a URDF or start with the sample robot. Your current project changes only when you apply the setup.</p>
+        {step === 0 && <><h3>Choose your robot model</h3><p>Open a Model Builder ZIP with its meshes, import a URDF, or use the sample robot. Your current project changes only when you apply the setup.</p>
           <div className="setup-actions"><button disabled={busy || !defaults} onClick={() => defaults && inspect(defaults.reference_urdf)}>Use sample robot</button>
+            <label className="setup-file">Open Model Builder ZIP<input aria-label="Model Builder ZIP" type="file" accept=".zip" disabled={busy||!defaults} onChange={async e=>{
+              const file=e.target.files?.[0];e.target.value='';if(!file)return;
+              if(file.size>8*1024*1024){setError('Builder bundle exceeds 8 MiB');return;}
+              setBusy(true);setError(null);
+              try{const model=await api.importBuilderBundle(file);await inspect(model.robot_urdf,model.robot_assets);}catch(err){setError(String(err));}finally{setBusy(false);}
+            }}/></label>
             <label className="setup-file">Choose URDF<input aria-label="Setup URDF file" type="file" accept=".urdf" disabled={busy || !defaults} onChange={async e => {
               const file=e.target.files?.[0]; e.target.value=""; if (!file) return;
               if (file.size>4*1024*1024) { setError("URDF exceeds 4 MiB"); return; }
@@ -99,7 +107,7 @@ export function RobotSetupWizard({ projectName, positions, onClose, onApplied }:
           </label>)}</div>)}</div>
           <label>Wheel radius override (m)<input type="number" min=".001" step=".01" placeholder="Use URDF radius" value={drive.wheel_radius ?? ""}
             onChange={e => setDrive({ wheel_radius:e.target.value==="" ? null : Number(e.target.value) })} /></label>
-          <small>Leave blank to read cylinder radii from the URDF. All four wheels must use equal radii and rotate around base +Y.</small>
+          <small>For mesh wheels, enter the measured radius. All four wheels must use equal radii and rotate around base +Y. For builder models, place the base frame at ground level and wheel centres one radius above it.</small>
           <div className="setup-two-columns"><label>Robot clearance radius (m)<input type="number" step=".01" min=".01" value={drive.collision_radius} onChange={e => setDrive({collision_radius:Number(e.target.value)})} /></label>
             <label>Encoder ticks per revolution<input type="number" min="1" step="1" value={drive.ticks_per_turn} onChange={e => setDrive({ticks_per_turn:Number(e.target.value)})} /></label></div>
           <label>Planning clearance (m)<input type="number" step=".01" min=".01" value={draft?.robot_config.mapping.inflation_radius}
