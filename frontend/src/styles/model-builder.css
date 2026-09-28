@@ -13,3 +13,12 @@
 .model-builder pre { white-space:pre-wrap; max-height:300px; overflow:auto; }
 .model-builder [role=alert] { color:#a52734; }
 @media(max-width:900px) { .model-columns { grid-template-columns:1fr; } }
+
+.model-builder small { display:block; margin-top:3px; opacity:.72; font-size:.82em; }
+.model-builder .builder-note, .model-builder .builder-source { padding:8px 10px; border:1px solid #c7d2df; border-radius:7px; background:#eaf0f6; }
+.model-builder .builder-source { margin:10px 0; }
+
+.model-tree { max-height:220px; overflow:auto; border:1px solid #c7d2df; border-radius:7px; background:#fff; margin:8px 0 12px; padding:4px 0; }
+.model-tree-item { display:block; width:100%; margin:0; padding-top:6px; padding-bottom:6px; border:0; border-radius:0; text-align:left; background:transparent; color:#24364a; }
+.model-tree-item:hover, .model-tree-item.active { background:#e7eef6; }
+.model-tree-item small { float:right; margin-right:8px; opacity:.68; }

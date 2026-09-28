@@ -52,13 +52,17 @@ class Link(Strict):
     effort: float = Field(default=1., gt=0, le=1e12)
     velocity: float = Field(default=1., gt=0, le=1e9)
     mass: float | None = Field(default=None, gt=0, le=1e12)
-    collision: Literal['box', 'none'] = 'box'
+    collision: Literal['box', 'mesh', 'none'] = 'box'
 
 
 class Model(Strict):
     format: Literal['pyrobot-model'] = 'pyrobot-model'
     version: Literal[1] = 1
     name: Name = 'my_robot'
+    source_format: Literal['obj', 'step'] = 'obj'
+    source_name: str | None = Field(default=None, max_length=200)
+    source_unit: str | None = Field(default=None, max_length=40)
+    import_notes: list[str] = Field(default_factory=list, max_length=8)
     scale: float = Field(default=1., gt=0, le=1000000)
     parts: list[Part] = Field(min_length=1, max_length=256)
     links: list[Link] = Field(min_length=1, max_length=128)
@@ -231,8 +235,20 @@ def preview(model, positions=None):
         transformed = vertices @ matrix[:3,:3].T + matrix[:3,3]
         normals = None if part.normals is None else [[None if n is None else (matrix[:3,:3] @ n).tolist() for n in row] for row in part.normals]
         parts.append({'id':part.id,'name':part.name,'link':name,'vertices':transformed.tolist(),'faces':part.faces,'normals':normals,'smoothing':part.smoothing})
-    return {'parts':parts, 'frames':[{'name':link.name,'xyz':moved[link.name][:3,3].tolist(),
-        'axis':(moved[link.name][:3,:3] @ (np.array(link.axis)/np.linalg.norm(link.axis))).tolist()} for link in model.links]}
+    frames = []
+    for link in model.links:
+        rotation = moved[link.name][:3, :3]
+        joint_axis = rotation @ (np.array(link.axis) / np.linalg.norm(link.axis))
+        frames.append({
+            'name': link.name,
+            'xyz': moved[link.name][:3,3].tolist(),
+            'axis': joint_axis.tolist(),
+            'joint_type': link.kind,
+            'x_axis': rotation[:,0].tolist(),
+            'y_axis': rotation[:,1].tolist(),
+            'z_axis': rotation[:,2].tolist(),
+        })
+    return {'parts':parts, 'frames':frames}
 
 
 def rpy_from(matrix):
@@ -244,7 +260,7 @@ def rpy_from(matrix):
 def bundle(model):
     zero, _ = poses(model)
     robot = ET.Element('robot', name=model.name)
-    meshes = {}; warnings = ['OBJ materials/textures are not exported. Collision boxes and inertia are approximations, not CAD mass properties.']
+    meshes = {}; warnings = ['CAD material/texture finishes are not exported. Enter verified mass/inertia before physics use.'] if model.source_format == 'step' else ['OBJ materials/textures are not exported. Collision boxes and inertia are approximations, not CAD mass properties.']
     fmt = lambda values: ' '.join(f'{float(v):.12g}' for v in values)
     by_id = {p.id:p for p in model.parts}
     for link in model.links:
@@ -270,6 +286,9 @@ def bundle(model):
             if link.collision == 'box':
                 collision = ET.SubElement(element,'collision'); ET.SubElement(collision,'origin',xyz=fmt(centre),rpy='0 0 0')
                 ET.SubElement(ET.SubElement(collision,'geometry'),'box',size=fmt(size))
+            elif link.collision == 'mesh':
+                collision = ET.SubElement(element,'collision'); ET.SubElement(collision,'origin',xyz='0 0 0',rpy='0 0 0')
+                ET.SubElement(ET.SubElement(collision,'geometry'),'mesh',filename=path)
             if link.mass is not None:
                 inertial = ET.SubElement(element,'inertial'); ET.SubElement(inertial,'origin',xyz=fmt(centre),rpy='0 0 0')
                 ET.SubElement(inertial,'mass',value=str(link.mass))

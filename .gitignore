@@ -13,3 +13,9 @@ artifacts/
 !.env.*.example
 *.pem
 *.key
+
+# Optional local CAD integration data and generated export
+/sdk.zip
+/tests/fixtures/car1.STEP
+/tests/fixtures/car1.log
+/tests/fixtures/Assem1.SLDASM.urdf

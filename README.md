@@ -1,277 +1,93 @@
 # PyRobot Studio
 
-A visual robotics workbench built with React, FastAPI, Python plugins and ZeroMQ.
-The goal is a cross-platform robotics platform with Rerun, Webots, portable robot
-projects, target deployment and AI-assisted development.
+A visual robotics workbench using React, FastAPI, Python plugins and ZeroMQ.
+It supports visual graphs, headless execution, robot modeling, simulation and
+remote project deployment. This is an engineering baseline, not a packaged
+desktop release or a hardware-qualified control system.
 
-**Try the [four-wheel simulation project](examples/four-wheel/README.md):**
-URDF robot, lidar, camera, encoders, local SLAM, A* navigation and embedded Rerun.
-The [keyboard, waypoint and Webots examples](examples/four-wheel/CONTROLS_AND_WEBOTS.md)
-add manual driving, map-selected missions and actual Webots wheel physics.
+## Install from a clean checkout
 
-**New: [guided robot setup](docs/GUIDED_ROBOT_SETUP.md).** Click **Robot setup** to
-preview a URDF, assign wheels and sensor frames, validate the configuration and
-create a wired simulation project without editing JSON.
+Use 64-bit Python **3.14.6**, Node.js **24.18.0**, npm and Git. Version files
+and CI use these versions. Windows is the locally verified platform; Linux has
+a CI job but must be verified by a successful run. ARM is not qualified.
 
-**[Native Webots robot examples](examples/webots/README.md):** choose **Examples**
-to open a Panda arm, NAO humanoid or KUKA youBot with the original Webots world,
-Studio action controls and Rerun joint telemetry.
+From the repository root in PowerShell:
 
-**[Robot connection and deployment](docs/ROBOT_DEPLOYMENT.md):** use **Deploy**
-to connect to an authenticated robot agent, check and transfer a project, and
-start/stop its graph or inspect health and logs remotely.
-
-See [industrial hardening status](docs/INDUSTRIAL_READINESS.md) for security setup,
-implemented safeguards and the remaining production/hardware qualification work.
-
-**[Plugin Builder](docs/PLUGIN_BUILDER.md):** create sensor and processing plugins
-with visual port/settings editors, editable Python, subprocess tests and source-package export.
-
-**[Robot Model Builder](docs/ROBOT_MODEL_BUILDER.md):** import OBJ components,
-group links, configure joints, preview motion, calibrate scale and export URDF with mesh assets.
-
-**[Model to simulation](docs/MODEL_TO_SIMULATION.md):** send a supported four-wheel
-builder robot directly into guided setup, or open its exported ZIP. Preserve its
-visual meshes and component colors in Rerun/Webots and save embedded meshes with
-the project, without manually moving mesh files.
-
-**Current milestone:** a runnable reference robot, versioned project save/load,
-and a UI-independent runtime with headless project validation and execution.
-The [runtime hardening guide](docs/RUNTIME_HARDENING.md) describes typed messages,
-startup readiness, node health, preserved capture timestamps and configurable
-robot/environment/map settings, including version 1 project migration.
-See [the foundation guide](docs/FOUNDATION.md) for setup, a runnable example,
-verification, limitations and the next milestones.
-
-The historical phase notes below describe the earlier prototype. Where they
-conflict with the foundation guide, use the guide. In particular, the embedded
-Rerun viewport is available for the reference simulation; general live-joint
-transforms remain unfinished. Camera fallback now
-requires explicit opt-in, and project files do not yet bundle external assets.
-
----
-
-# PyRobot Studio — Ground-Up Rebuild
-
-Status: **Phase 1-4 complete** — bus, PRT timing, plugin SDK, URDF engine,
-FastAPI backend, React Studio UI, Rerun 3D/SLAM viz, real device plugins
-(camera, CAN, serial), a processing node, and CLI plugin scaffolding —
-all tested end-to-end, including deliberately-triggered failure paths.
-
-## What's built and tested right now
-
-### 1. Message Bus (`core/bus/`)
-- `broker.py` — standalone ZeroMQ XSUB/XPUB proxy. This is the actual hub;
-  every node connects to it (never binds directly to each other). Run it
-  standalone with `python -m core.bus.broker`, or embed it in the backend
-  process at startup.
-- `base.py` — `Bus` / `BusTransport` / `ZmqTransport`. Plugin code only ever
-  talks to `Bus.publish()` / `Bus.subscribe()` — the transport is swappable
-  (LCM adapter can be dropped in later for topics that need it, same hybrid
-  approach as V3).
-- ✅ Verified: real broker, real publisher, real subscriber, 100Hz stream,
-  zero drops, correct topic routing (`tests/test_bus_integration.py`).
-
-### 2. PRT — PyRobot Time (`core/timing/`)
-- `clock.py` — `PRTClock` (per-node, stamps at capture time) + `ClockAuthority`
-  (one per session, broadcasts sync beacons other nodes discipline to).
-  Inspired by SMPTE's idea of a genlock time authority, but rate-agnostic
-  (no fixed 24/30fps assumption) since different sensors run at wildly
-  different Hz.
-  - ✅ Verified: monotonic stamping, correct sequence counting, discipline
-    offset correction, SMPTE-style `HH:MM:SS:FF` display labels.
-- `timeline.py` — `TimelineRecorder` / `TimelinePlayer`. Records every bus
-  message to a flat log + sqlite seek index; supports scrub/seek, variable-
-  speed replay, and topic-filtered playback.
-  - ✅ Verified: record 5 messages → close → reopen → seek/read back
-    byte-identical payloads → full playback in original order.
-
-### 3. Plugin SDK (`sdk/pyrobot_plugin/`)
-- `manifest.py` — `PluginManifest`, `PortSpec`, `ParamSpec`. Fully
-  introspectable — this is what will let the Studio UI auto-generate node
-  cards and property panels with zero per-plugin frontend code.
-- `node.py` — `Node` base class. Subclass it, declare a `manifest`,
-  implement `on_start` / `on_message`, call `self.emit(...)`. Bus wiring,
-  topic naming, and lifecycle are handled for you.
-- `plugins/examples/fake_imu.py` — a real working example plugin (~30
-  lines) proving the SDK surface is usable.
-
-### 4. URDF Engine (`core/urdf/`)
-- `model.py` — parses `.urdf` (and `.xacro` via the `xacro` CLI) into a
-  `RobotModel`: links, joints, mount origins, joint limits, kinematic-tree
-  queries (`path_to_root`, `static_transform` for fixed-joint offsets).
-  This becomes the source of truth plugins query instead of hand-written
-  YAML — a plugin with `requires_urdf_link=True` gets offered real link
-  names from the loaded robot.
-  - ✅ Verified against a sample 3-link robot: correct link/joint parsing,
-    correct kinematic chain resolution, correctly refuses to compute a
-    static transform through a non-fixed joint.
-
-### 5. Backend (`backend/app/`) — NEW in Phase 2
-- `plugin_registry.py` — scans a directory for `Node` subclasses and builds
-  the `manifest.id -> class` registry (no manual registration; drop a file
-  in `plugins/`, restart, it's discoverable).
-- `graph.py` — `NodeGraph`: instantiates nodes from the registry, and wires
-  connections between them as bus-level bridges (subscribes to node A's
-  output topic, republishes onto node B's input topic) — so individual
-  plugins stay unaware of graph topology.
-- `main.py` — FastAPI app: `/api/plugins`, `/api/robot/urdf` (upload +
-  parse), `/api/graph/*` (add/remove nodes, connect ports, start/stop),
-  and a `/ws/bus` WebSocket streaming every live bus message to a client
-  (this is what the future Studio UI will animate the node graph from).
-  - ✅ Verified end-to-end over real HTTP + WebSocket: plugin discovery,
-    URDF upload, rejecting an unbound `requires_urdf_link` node (400),
-    rejecting an unknown plugin id (404), starting a graph and receiving
-    >5 live messages over the websocket, and — critically — a real
-    node-to-node **connection** test proving messages published on one
-    node's output port are correctly bridged onto another node's input
-    port (`tests/test_backend.py`).
-- Explore it yourself: `uvicorn backend.app.main:app --port 8000`
-  then open `http://localhost:8000/docs` for the interactive Swagger UI —
-  see the included PDF testing guide for a full walkthrough.
-
-### 6. Frontend (`frontend/`) — NEW in Phase 3
-Real Vite + React 19 + TypeScript app, using React Flow for the node canvas.
-Design system is the Neomorphism direction validated as a standalone mockup
-first (soft embossed panels, same-color-as-background cards, port jacks,
-rationed accent color) — see `frontend/src/styles/tokens.css` for the exact
-tokens carried over.
-
-- `components/TopBar.tsx` — brand, URDF upload (drives `/api/robot/urdf`),
-  a live PRT timecode readout (`utils/prt.ts` mirrors the backend's
-  `frame_label` formatting) fed by the bus WebSocket, and the Start/Stop
-  Graph control wired to `/api/graph/start` / `/stop`.
-- `components/Palette.tsx` — searchable, category-grouped, fetched live
-  from `/api/plugins`; collapsible per the earlier UI feedback.
-- `components/StudioNode.tsx` — the custom React Flow node renderer. Ports
-  are real React Flow `Handle`s (draggable, connectable) styled as the
-  neomorphic jacks from the mockup — manifest-driven, so a new plugin
-  needs zero frontend changes to render correctly.
-- `components/GridToolbar.tsx` — the grid visibility/spacing/opacity/style
-  popover from the mockup, now driving React Flow's *native* `Background`
-  and `snapToGrid`/`snapGrid` props rather than a hand-rolled CSS grid —
-  correct under pan/zoom, which the standalone mockup couldn't fully prove.
-- `components/Inspector.tsx` — selected node's manifest, ports, params,
-  URDF binding, and a live value panel driven by `/ws/bus`, filtered to
-  that node's own output topic.
-- `hooks/useGraph.ts` — the single source of truth: loads plugins + graph
-  state from the backend, wraps every mutation (add/remove node, connect,
-  start/stop) in the matching API call, and keeps React Flow's node/edge
-  state in sync. Canvas *position* is frontend-only (persisted to
-  `localStorage`) since the backend intentionally only tracks topology.
-- `hooks/useBusSocket.ts` — a reconnecting WebSocket client for `/ws/bus`,
-  keeping both "latest message overall" (topbar timecode) and "latest
-  per topic" (Inspector live value) up to date.
-- ✅ Verified: `npm run build` (`tsc -b && vite build`) completes clean
-  with no type errors; the backend's CORS preflight was confirmed to
-  actually return the headers the dev-server origin needs
-  (`access-control-allow-origin: *`) so the two can talk cross-port.
-
-### 7. Live Params (`sdk/pyrobot_plugin/node.py`, `backend/app/graph.py`) — NEW in Phase 4
-- `Node.update_params()` + `on_params_changed()` hook — a node can react
-  to a live param change (e.g. restart its capture loop at a new rate)
-  instead of only picking up new values on next start.
-- `PATCH /api/graph/nodes/{id}/params` — validates keys against the
-  plugin's manifest before applying (unknown key -> 400, not silently
-  ignored).
-  - ✅ Verified with a real behavior change, not just a dict update:
-    patched a running Fake IMU node from 20Hz to 200Hz mid-flight and
-    measured the actual message rate jump (~10 -> ~96 messages in 0.5s)
-    over the live WebSocket (`tests/test_backend.py`).
-
-### 8. Rerun 3D/SLAM Viewport (`core/viz/rerun_bridge.py`) — NEW in Phase 4
-- Backend starts a real Rerun gRPC log stream + web viewer at startup;
-  any plugin logs to it with a plain `rerun.log(...)` call, no
-  plugin-specific wiring needed. `GET /api/viz/url` exposes the viewer
-  URL to the frontend.
-- `plugins/examples/pointcloud_viz.py` — a synthetic SLAM stand-in
-  (drifting point cloud + an actually-accumulating trajectory trail —
-  logging a single replaced point per frame would NOT show a trail in
-  Rerun's live view, so the plugin maintains and re-logs the growing
-  point list each frame) until a real SLAM algorithm is wired in.
-- `frontend/src/components/RerunViewport.tsx` — embeds the web viewer in
-  an iframe, toggled from the canvas toolbar. Deliberately not
-  reimplemented in React — Rerun's own viewer already handles camera
-  controls and timeline scrubbing correctly.
-  - ✅ Verified: while a node is actively logging, the Rerun web viewer
-    responds HTTP 200 (`tests/test_rerun_integration.py`) — not just
-    "the process didn't crash."
-
-### 9. Real Device & Processing Plugins (`plugins/devices/`, `plugins/processing/`) — NEW in Phase 4
-- `camera_source.py` — real OpenCV capture; falls back to a synthetic,
-  genuinely-animating test pattern when no camera hardware is present so
-  the graph stays runnable during development.
-  - 🐛 **Caught and fixed a real bug here**: the synthetic frame generator
-    overflowed doing `uint8 % 256` and silently crashed the capture
-    thread. Fixed by widening to `int16` before the modulo.
-- `can_reader.py` / `can_writer.py` — real `python-can` I/O against any
-  interface (`socketcan`, `virtual`, `pcan`, ...).
-  - ✅ Verified against a **virtual CAN bus with an externally-injected
-    frame** — a completely independent `python-can` connection sends a
-    frame, and the plugin picks it up for real (`tests/test_device_plugins.py`).
-- `serial_reader.py` — real `pyserial` line reading.
-  - ✅ Verified against a **real OS pseudo-terminal pair** (`pty.openpty()`)
-    standing in for a USB-serial device — indistinguishable to the plugin
-    from real hardware.
-- `pointcloud_filter.py` — real voxel-grid downsampling (not a stub).
-  - ✅ Verified with exact centroid math against known input/output, plus
-    edge cases (empty cloud, no-merge case) (`tests/test_pointcloud_filter.py`).
-- 🐛 **Caught a second real bug** while testing CAN: injecting the test
-  frame *before* opening the WebSocket subscriber raced ZeroMQ's
-  "slow joiner" behavior (a subscriber connecting after a publish misses
-  it) and silently ate the one-shot message. Continuous-stream plugins
-  (IMU, camera) never hit this by luck; fixed by subscribing first.
-
-### 10. Plugin CLI (`sdk/cli.py`) — NEW in Phase 4
-- `python -m sdk.cli create-plugin <name> --category ... --input name:type --output name:type`
-  scaffolds a ready-to-run source or processing node — correct manifest,
-  correct base-class hooks, TODOs only where real logic has to go.
-  - ✅ Verified the generated code isn't just syntactically valid: ran the
-    CLI as a real subprocess, discovered the output with the actual
-    `PluginRegistry`, instantiated both generated classes, and confirmed
-    messages flow from the generated source node to the generated
-    processing node over the bus (`tests/test_cli_scaffolding.py`).
-- `plugins/user/` is the landing spot — auto-discovered, documented with
-  its own README.
-
-**Running it:**
-```bash
-# terminal 1 — backend
-cd pyrobot-studio
-pip install -r requirements.txt
-uvicorn backend.app.main:app --port 8000
-
-# terminal 2 — frontend
-cd pyrobot-studio/frontend
-npm install
-npm run dev
-# open the printed localhost URL (default http://localhost:5173)
+```powershell
+py -3.14 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
+.\.venv\Scripts\python.exe -m pip check
+cd frontend
+npm.cmd ci
+npm.cmd run build
+cd ..
 ```
-`node_modules/` isn't included in the archive (137MB) — `npm install`
-pulls it fresh from your `frontend/package.json`.
 
-## Not built yet
-1. Porting the rest of the 26+ V3 nodes not covered above (ZED SDK,
-   RealSense — camera_source.py covers generic webcams, not those SDKs
-   specifically)
-2. DevBus as a distinct aggregator concept (each device plugin publishes
-   independently today; a dedicated "DevBus Publisher" that fans multiple
-   device topics into one namespace hasn't been built)
-3. Hot-reload dev server for plugins (CLI scaffolding exists; live
-   reload without restarting the backend does not)
-4. A real SLAM algorithm (fast-lio, etc.) — `pointcloud_viz.py` is a
-   synthetic stand-in proving the Rerun pipeline works, not a working
-   SLAM implementation
+On Linux, create the environment with `python3.14 -m venv .venv`, use
+`.venv/bin/python` instead of the Windows executable, and use `npm`.
+The lockfiles pin dependencies; do not substitute `npm install` or the loose
+`requirements.txt` when reproducing this baseline. See [baseline verification](docs/BASELINE.md).
 
-## Running the full test suite
-```bash
-pip install -r requirements.txt
+## Start Studio
 
-for f in tests/test_*.py; do python3 "$f"; done
+Keep both terminals open. From the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
-Each file is also runnable standalone and prints its own pass/fail per
-check. `test_backend.py`, `test_rerun_integration.py`, and
-`test_device_plugins.py` each start their own FastAPI TestClient (which
-spins up a bus broker); running two in the *same* Python process can hit
-a harmless `Address already in use` on the second one — running the files
-as separate processes (as above) avoids it.
+
+In another terminal:
+
+```powershell
+cd frontend
+npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+Open **http://127.0.0.1:5173**. Choose **Open project** and select
+`examples/four-wheel/navigation.pyrobot.json`, then start the graph.
+The built-in simulator needs no physical hardware or Webots installation.
+Stop the graph before closing the terminals with Ctrl+C.
+
+## Current capabilities
+
+- Visual plugin graphs, parameter editing, typed message contracts, diagnostics,
+  supervised graph lifecycle and a UI-independent headless runtime.
+- Plugin SDK, CLI scaffolding and Plugin Builder with subprocess draft tests.
+- URDF/Xacro loading, STEP/OBJ Model Builder, assembly frames and joint editing.
+  Detailed STEP assemblies are simplified to fit the mesh budget.
+- Guided four-wheel robot setup, built-in simulation, Rerun visualization,
+  Webots integration, keyboard control, local lidar SLAM and waypoint navigation.
+- Versioned project save/open. Version 3 embeds Model Builder meshes, normals
+  and display colors; versions 1 and 2 remain readable.
+- Authenticated deployment agent with compatibility checks, project transfer,
+  remote start/stop, health and logs.
+
+## Guides
+
+| Task | Guide |
+| --- | --- |
+| Reproduce and verify an installation | [Baseline](docs/BASELINE.md) |
+| Understand runtime behavior and limitations | [Runtime contracts](docs/RUNTIME_HARDENING.md) |
+| Create plugins | [Plugin Builder](docs/PLUGIN_BUILDER.md) |
+| Import CAD and edit robot joints | [Model Builder](docs/ROBOT_MODEL_BUILDER.md) |
+| Transfer a model into simulation | [Model to simulation](docs/MODEL_TO_SIMULATION.md) |
+| Configure wheels and sensors | [Robot setup](docs/GUIDED_ROBOT_SETUP.md) |
+| Drive and navigate a robot | [Controls and Webots](examples/four-wheel/CONTROLS_AND_WEBOTS.md) |
+| Try native Webots examples | [Webots examples](examples/webots/README.md) |
+| Connect to a deployment agent | [Deployment](docs/ROBOT_DEPLOYMENT.md) |
+| Assess hardware/production readiness | [Industrial readiness](docs/INDUSTRIAL_READINESS.md) |
+| Choose the next milestone | [Roadmap](docs/ROADMAP.md) |
+
+## Boundaries
+
+Custom drive setup currently supports four-wheel differential robots. CAD
+materials/textures and measured mass properties are not imported. Mesh reduction
+is approximate. General live transforms and manipulation planning remain future
+work. Installed plugins execute in the runtime process; draft subprocess tests
+are not a security sandbox. Hardware transports are not verified actuator drivers.
+
+Projects do not bundle plugin code, Python dependencies, arbitrary external
+assets or model weights. Autosave/undo, desktop installation, automatic hardware
+profiles, firmware flashing and AI assistance remain unfinished. The optional
+`car1` integration fixture is local; the regular suite uses committed examples.
+No project license has been selected; redistribution needs a separate review.

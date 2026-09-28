@@ -1,44 +1,60 @@
-# Robot Model Builder: OBJ to URDF
+# Robot Model Builder: CAD assembly to URDF
 
-Choose **Model Builder** in Studio. This editor creates robot links and joints from mesh components, with a motion preview and an exportable URDF/mesh bundle. STEP import is not implemented; export an OBJ from CAD first. This is a mesh-based model editor, not a solid CAD engine.
+PyRobot Studio now treats STEP/STP assembly import as the recommended CAD-to-robot workflow. OBJ remains supported for mesh-only fallback imports.
 
-## First example
+## Recommended workflow
 
-1. Import `examples/model-builder/two-link-arm.obj` with **Metres** selected. It contains a base and arm.
-2. Select the arm in the component list or click it in the viewport. Choose **Create link from selection**, rename the new link `arm_link`, and keep `base_link` as parent.
-3. Set the joint to **revolute**. Set pivot XYZ to `0.1, 0, 0.15`, frame roll/pitch/yaw to `0, 0, 0` and axis to `0, 0, 1`.
-4. Move the `arm_link` position slider. Its mesh should rotate around that pivot. Reset to zero when finished.
-5. Confirm scale/orientation, then **Validate URDF**. Mass is intentionally unspecified. If you enter measured mass, the editor generates an approximate uniform-box inertia.
-6. **Export URDF bundle** downloads a ZIP with `robot.urdf`, per-link STL meshes, `robot-builder.json` and an explanation of approximations. Extract all files together so relative mesh paths remain valid.
+1. Export the robot assembly from CAD as `.step` / `.stp`.
+2. Open **Model Builder** and use **Import STEP / STP**.
+3. Keep the suggested mesh deflection initially; reduce it when small curved details need more fidelity, or increase it when the CAD is very large.
+4. Studio reads the STEP assembly with Open CASCADE, tessellates the solid geometry, and preserves the assembly component hierarchy and instance placements as link frames.
+5. Imported components start as **fixed** joints. This is deliberate: STEP assembly placement is reliable geometry/transform data, but PyRobot Studio does not guess revolute/prismatic semantics from CAD constraints.
+6. Use the 3D preview to inspect link origins and the XYZ frame axes. Change parent links, joint types, axes, limits, effort and velocity as needed.
+7. Validate and export the URDF bundle.
 
-## Components and links
+## What STEP fixes compared with OBJ
 
-OBJ object/group labels are preserved. With the split option enabled, disconnected vertex components within a label become separate selectable parts. This is topology-based splitting: duplicated seam vertices can create extra parts, and welded geometry cannot be split into mechanical components automatically. Merge disconnected pieces by assigning them to the same link. There is no manual face-cutting tool yet.
+OBJ is a triangle-mesh interchange format. It does not provide a trustworthy mechanical assembly tree or joint/frame semantics. A STEP assembly keeps CAD solid geometry and component placements, so Studio no longer has to reconstruct the basic component layout from disconnected mesh topology.
 
-Every part belongs to exactly one rigid link. Select several parts and create a link, or assign them to an existing active link. Add empty sensor frames for mount locations without geometry. Merge a child link into its parent to undo unnecessary mechanical separation. Regrouping clears mass on affected links because the previous mass may no longer describe them.
+The importer still performs tessellation for the interactive preview and URDF mesh assets. Assemblies above 12,000 triangles are simplified component by component, with more detail allocated to larger parts. Components and assembly frames are retained. The builder reports the original and reduced triangle counts; inspect small features after reduction. Unchanged components retain CAD surface normals, while simplified components receive new normals with sharp-edge splitting. The CAD file remains the authoritative geometry source; the editable `pyrobot-model` JSON is the robot-kinematics source after import.
 
-The importer accepts polygon OBJ geometry, including negative vertex/normal indices and simple planar concave polygons. It preserves corner normals and smoothing groups, but ignores materials, textures and texture coordinates. Unsupported/invalid faces produce line-numbered errors. Limits are 4 MiB per OBJ, 30,000 source vertices, 60,000 source normals, 20,000 triangles and 256 components; simplify larger CAD exports before import.
+## Units
 
-The preview uses depth-tested surface rendering with **Smooth shading** enabled and **Wireframe** disabled by default. Imported normals take priority. Without normals, area-weighted smoothing joins coincident vertices within a part when faces differ by at most 45 degrees and share a smoothing group; explicit `s off` keeps faces flat. Turn off smooth shading to inspect facets, or enable wireframe to inspect triangles. Browsers without WebGL show a basic preview. These display controls do not change geometry: an angular silhouette still needs a finer CAD mesh export. Normals survive editable-model saves and joint motion; exported STL files contain face normals only.
+Open CASCADE reads the STEP unit declarations and converts geometry and placements to millimetres. The editable model uses a scale of 0.001 metres per mesh unit, independent of the source units. Mesh deflection is also measured in millimetres. The source-unit label is informational only; it does not control scaling. Always verify one known dimension before export.
 
-## Scale and coordinate frames
+## Frames and joints
 
-OBJ coordinates do not establish trustworthy physical scale. Choose metres, centimetres or millimetres before import, or enter **metres per OBJ unit** afterward. Alternatively select components and calibrate one of their axis-aligned X/Y/Z bounding dimensions against a known measurement. This is bounding-box calibration, not a point-to-point measuring tool.
+The preview shows XYZ axes for every link frame. Moving joint axes are drawn as purple dashed lines alongside the XYZ frame axes. Use the frame display to verify the CAD origin convention before creating moving joints.
 
-Link pivots are entered in the imported model's zero-pose coordinates, in metres. Frame roll/pitch/yaw is in radians. Joint axes are expressed in the child link frame and normalized for export. The pivot is the link frame origin; it need not coincide with the geometry centre. Use **Centre pivot on link geometry** as a starting point, then adjust it to the actual shaft or hinge.
+Imported assembly relationships become fixed joints initially. Do not treat a CAD mate/constraint as an automatically verified URDF joint. Explicitly set and verify each moving joint's parent, origin and axis.
 
-The root link frame becomes the exported URDF origin; its orientation defines robot forward/up. Geometry is transformed into each link's local frame and joint origins are calculated relative to their parents. The viewport stays in imported-model coordinates, so exported root coordinates can differ by a global rigid transform. Rescaling also scales pivot positions and prismatic travel limits. Revolute/prismatic limits must include the imported zero pose.
+## Collision geometry
 
-Fixed, continuous, revolute and prismatic joints are supported. The editor validates a single connected tree, unique link names, assignments, finite coordinates, valid axes and limits. Closed mechanical loops, floating joints and mimic joints are not supported.
+Each link can use **Bounding box**, **CAD mesh**, or **None** for collision. Bounding boxes are cheap and robust. CAD-mesh collision is included in the exported URDF. Studio's current built-in/Webots reference simulators still use their documented circle/box/cylinder approximations; choosing CAD mesh does not enable exact mesh collision physics there.
 
-## Physics and Studio integration limits
+## Mass and inertia
 
-Collision geometry is an optional axis-aligned box in the link frame, not an exact mesh or convex decomposition. If mass is supplied, centre of mass and inertia are estimated from a uniform bounding box; these are not CAD-derived or measured mass properties. Omitted mass/inertia is reported during validation/export. A generated URDF is not a qualified physics model until these properties are checked.
+The builder does not claim CAD material or mass properties automatically. Enter verified mass properties before physics use. The existing fallback inertia calculation is still only a box approximation when a mass is supplied.
 
-Use **Use in robot setup** to hand the model directly to the guided setup preview, or open the exported ZIP in Robot setup. Supported four-wheel robots can create a built-in or Webots simulation project with the visual meshes, normals and component colors preserved. Save project embeds these assets; manual mesh copying is unnecessary. See [the model-to-simulation guide](MODEL_TO_SIMULATION.md) for geometry requirements and the included mesh rover. Arbitrary articulated robots and exact CAD physics are not supported.
+## OBJ fallback
 
-**Save editable model** writes a complete JSON model with geometry and editor settings. Reopen it using **Open editable model**, or use `robot-builder.json` from the ZIP. Closing/reopening the dialog preserves the model for the current Studio tab session; reloading the browser does not. Save before refreshing. Camera angles, selection and motion-slider positions are temporary preview state.
+OBJ import remains useful for simple mesh-only models. It keeps the original topology-based grouping, smoothing information, and scale calibration tools, but it does not provide the CAD assembly fidelity of STEP import.
 
-## Tests
 
-`python tests/run_all.py` covers OBJ grouping, concave triangulation, invalid faces, kinematic transforms, link-local mesh export, bundle round-trips and invalid joint trees. The optional `python tests/browser_model_builder.py` checks the actual editor workflow with Playwright/Edge.
+## Existing OBJ and simulation workflow
+
+OBJ import still supports object/group labels, loose-component splitting, negative indices, planar polygon triangulation, corner normals and smoothing groups. Scale calibration measures an axis-aligned selection dimension. Camera and selection controls are temporary preview state.
+
+Smooth shading is enabled and wireframe disabled by default. Source normals take priority; without them Studio averages suitable neighboring faces while preserving sharp edges. STEP uses surface-derived corner normals and correctly oriented triangles, retaining smooth curves and sharp caps.
+
+Use **Use in robot setup** for direct handoff, or open the exported Model Builder ZIP in Robot setup. The builder's component colors and normals remain embedded in the saved project. See [Model to simulation](MODEL_TO_SIMULATION.md) for the sample rover, setup steps, supported geometry and test commands.
+
+**Save editable model** preserves geometry and link settings as JSON. Reopen it through **Open editable model** or obtain it from the URDF ZIP. Save before refreshing Studio. Every component must belong to exactly one link; joints must form one connected tree. Revolute and prismatic limits must contain the imported zero pose. Link origins use imported world coordinates; exported URDF origins are calculated relative to each parent.
+
+Limits remain 20,000 triangles per model, 30,000 vertices per component, 128 links and 256 components. STEP upload accepts up to 64 MiB; OBJ accepts up to 4 MiB. Automatic STEP reduction uses a bounded working mesh: up to 200,000 triangles per component and 500,000 per assembly. Exceeding those working limits still requires larger deflection or a simpler CAD assembly. Source CAD materials and textures are not imported.
+
+Verification: `python tests/run_all.py`, `python tests/browser_model_builder.py`, and the frontend build. STEP regression tests directly use the required `cadquery-ocp` dependency, covering physical units, nested/repeated placements, face orientation and curved-surface normals.
+
+To run the browser import test with a specific STEP file, set `PYROBOT_STEP_FIXTURE` to its absolute path before running `tests/browser_model_builder.py`. The later drive test uses the supported sample rover, not the supplied STEP assembly.
+
+For the optional local `tests/fixtures/car1.STEP` fixture, run `python tests/car1_workflow.py --import-step`. It creates an estimated simulation draft under `artifacts/car1`, tests setup, embedded project save/reopen and built-in driving, and exports a Webots project. Then run `python tests/webots_smoke.py --project artifacts/car1/car1-webots.project.json` for real Webots driving and navigation. The draft uses CAD-derived wheel size, CAD -X forward and level test sensors 10 mm outside their housings; verify these against the physical robot before using the configuration elsewhere.

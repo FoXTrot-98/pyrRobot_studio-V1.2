@@ -43,6 +43,7 @@ export const api = {
   modelSetup: (model:RobotBuilderModel) => request<RobotPackage>('/api/model-builder/setup',{method:'POST',body:JSON.stringify(model)}),
   importBuilderBundle: (file:File) => {const form=new FormData();form.append('file',file);return request<RobotPackage>('/api/robot/setup/bundle',{method:'POST',body:form});},
   importModelObj: (text:string, split:boolean) => request<RobotBuilderModel>('/api/model-builder/import-obj',{method:'POST',body:JSON.stringify({text,split})}),
+  importModelStep: (file:File, deflection=0.5, angle=0.5) => {const form=new FormData();form.append('file',file);return request<RobotBuilderModel>(`/api/model-builder/import-step?deflection=${encodeURIComponent(deflection)}&angle=${encodeURIComponent(angle)}`,{method:'POST',body:form});},
   checkModelDocument: (model:unknown) => request<RobotBuilderModel>('/api/model-builder/document',{method:'POST',body:JSON.stringify(model)}),
   previewModel: (model:RobotBuilderModel, positions:Record<string,number>) => request<ModelPreview>('/api/model-builder/preview',{method:'POST',body:JSON.stringify({model,positions})}),
   validateModel: (model:RobotBuilderModel) => request<{urdf:string;warnings:string[]}>('/api/model-builder/validate',{method:'POST',body:JSON.stringify(model)}),

@@ -21,6 +21,8 @@ from core.runtime.project import ProjectDocument
 
 def main():
     doc = ProjectDocument.model_validate_json((ROOT/"examples/four-wheel/webots.pyrobot.json").read_text())
+    if '--project' in sys.argv:
+        doc = ProjectDocument.model_validate_json(Path(sys.argv[sys.argv.index('--project')+1]).read_text(encoding='utf-8'))
     if '--mesh' in sys.argv:
         from core.urdf.builder import Model
         from core.urdf.assets import builder_package

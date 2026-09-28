@@ -1,6 +1,10 @@
 # From Model Builder to simulation
 
-Model Builder robots can now go directly into guided setup, with embedded visual meshes, smooth normals and the builder's component colors. No mesh extraction or manual file copying is needed. This workflow supports four-wheel differential robots, not arbitrary articulated machines.
+Model Builder robots imported from STEP/STP or OBJ can go directly into guided setup, with embedded visual meshes, smooth normals and the builder's component colors. No mesh extraction or manual file copying is needed. This workflow supports four-wheel differential robots, not arbitrary articulated machines.
+
+## Start from CAD
+
+Import STEP/STP in Model Builder, inspect the assembly tree, and define moving joints explicitly. Imported placements remain fixed until you edit them. STEP geometry is normalized to millimetres; mesh deflection is always in millimetres, regardless of the source file units. XYZ axes show link orientation; purple dashed indicators show moving joint axes. Then use the same setup workflow below.
 
 ## Try the included mesh robot
 
@@ -17,7 +21,7 @@ You can also use **Export URDF bundle** in the builder and open that ZIP with **
 
 ## Preparing your CAD robot
 
-- Import OBJ, group rigid components into links, and set wheel pivots and joints in Model Builder.
+- Import STEP/STP or OBJ, group rigid components into links, and set wheel pivots and joints in Model Builder.
 - Use metres after scale calibration. Set the base frame at ground level, +X forward and +Z up.
 - Place the four wheel centres one wheel radius above the base frame. Their transformed axes must point along base +Y, with two wheels on each side and equal radii. Enter the measured radius for mesh wheels.
 - Give wheel links descriptive names containing `wheel` for automatic suggestions, or select all joints manually.

@@ -42,8 +42,10 @@ from core.simulation.webots_examples import PROFILES, example_project
 from core.runtime.plugin_builder import Builder, Draft, TestRequest, generate
 from core.messages import SCHEMAS
 from core.urdf.builder import Model as BuilderModel, import_obj, preview as model_preview, bundle as model_bundle
+from core.urdf.cad import import_step
 from core.urdf.assets import Assets, builder_package, read_builder_bundle
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pyrobot.backend")
@@ -170,6 +172,24 @@ class ModelPreviewRequest(BaseModel):
 def builder_import_obj(request: ObjImportRequest):
     try: return import_obj(request.text, request.split).model_dump()
     except ValueError as exc: raise HTTPException(422, str(exc)) from exc
+
+
+@app.post('/api/model-builder/import-step')
+async def builder_import_step(file: UploadFile, deflection: float = 0.5, angle: float = 0.5):
+    suffix = Path(file.filename or '').suffix.lower()
+    if suffix not in ('.step', '.stp'):
+        raise HTTPException(400, 'Expected a .step or .stp file')
+    data = await file.read(64 * 1024 * 1024 + 1)
+    if len(data) > 64 * 1024 * 1024:
+        raise HTTPException(413, 'STEP file exceeds 64 MiB')
+    try:
+        model = await run_in_threadpool(import_step, data, filename=file.filename or 'robot.step', deflection=deflection, angle=angle)
+        return model.model_dump()
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        logger.exception('STEP import failed')
+        raise HTTPException(422, f'Failed to import STEP: {exc}') from exc
 
 
 @app.post('/api/model-builder/preview')

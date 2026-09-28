@@ -1,4 +1,4 @@
-"""Optional OBJ-to-URDF browser workflow; no simulator or hardware is started."""
+"""CAD/OBJ builder workflow and built-in simulation; no physical hardware is used."""
 import io
 import json
 import os
@@ -8,6 +8,7 @@ import sys
 import zipfile
 import xml.etree.ElementTree as ET
 from browser_simulation import ROOT, ready
+from pathlib import Path
 
 
 def main():
@@ -37,6 +38,19 @@ def main():
                 before = page.request.get('http://127.0.0.1:8022/api/project').json()
                 page.get_by_role('button', name='Model Builder', exact=True).click()
                 dialog = page.get_by_role('dialog', name='Robot Model Builder')
+                step_fixture = Path(os.environ['PYROBOT_STEP_FIXTURE']) if os.environ.get('PYROBOT_STEP_FIXTURE') else ROOT/'examples/model-builder/step-demo.step'
+                with page.expect_response(lambda r:'/api/model-builder/preview' in r.url, timeout=300000) as previewed:
+                    with page.expect_response(lambda r:'/api/model-builder/import-step' in r.url, timeout=300000) as imported:
+                        dialog.get_by_label('Import STEP',exact=True).set_input_files(step_fixture)
+                response=imported.value
+                assert response.status==200,response.text()
+                cad=response.json()
+                assert cad['source_format']=='step' and cad['scale']==.001 and len(cad['parts'])>1
+                expect(dialog.get_by_label('Robot assembly tree').get_by_role('button')).to_have_count(len(cad['links']))
+                assert previewed.value.status==200,previewed.value.text()
+                page.wait_for_function("() => { const c=document.querySelector('canvas[aria-label=\"Interactive robot model preview\"]'); return c && c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((v,i)=>i%4===3&&v>0); }")
+                dialog.evaluate('(element) => { element.scrollTop = 450; }')
+                page.screenshot(path=str(artifacts/'step-model-builder.png'))
                 dialog.get_by_label('Import OBJ', exact=True).set_input_files(ROOT / 'examples/model-builder/two-link-arm.obj')
                 dialog.get_by_label(re.compile(r'arm \(2\)')).check()
                 expect(dialog.get_by_label('Smooth shading', exact=True)).to_be_checked()

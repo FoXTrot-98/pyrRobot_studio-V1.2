@@ -1,17 +1,3 @@
-A desktop application with managed startup
-One shortcut starts Studio, its bundled backend, messaging and visualization. Closing the app safely stops its owned processes. Startup errors appear inside Studio with actionable recovery options. Users should not install Python or Node separately.
-
-A guided robot setup
-After URDF import, show the robot in 3D and guide the user through selecting wheel joints, drive type, lidar, camera and connections. Generate configuration automatically from these choices. URDF provides geometry; the wizard must still identify device drivers and connection settings.
-
-One portable project file
-Save the graph, URDF, meshes, maps, model files and plugin/dependency requirements in a project bundle. Opening it checks missing components and offers a clear installation workflow. Include autosave, undo/redo and migration between project versions.
-
-Simulation and hardware profiles
-Keep one processing graph and let users select Built-in simulation, Webots, or Physical robot. Profiles supply the appropriate sensors, actuator drivers and connection settings. Users should not rebuild the graph to switch environments.
-
-A robot connection and deployment screen
-Discover or connect to a robot computer, check compatibility, transfer the project, then start/stop and inspect logs remotely. Firmware flashing should be a separate guided operation for supported boards.
-
-Templates and guided diagnostics
-Provide working templates for common robots. Explain failures in terms such as “Lidar disconnected” or “Waypoint too close to a wall,” with the affected node highlighted. Keep raw logs available under an advanced view.
+The current prioritized roadmap is docs/ROADMAP.md.
+Setup and implemented capabilities are in README.md.
+Clean-checkout verification is in docs/BASELINE.md.

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '../api/client';
 import type { ModelLink, ModelPreview, RobotBuilderModel, Vector3 } from '../types/modelBuilder';
 import { ModelViewport } from './ModelViewport';
@@ -15,6 +15,8 @@ export function RobotModelBuilder({initial,onClose,onSetup}:{initial:RobotBuilde
   const [active,setActive]=useState(initial?.links[0]?.name??'base_link');
   const [split,setSplit]=useState(true);
   const [units,setUnits]=useState(1);
+  const [stepDeflection,setStepDeflection]=useState(0.5);
+  const [stepAngle,setStepAngle]=useState(0.5);
   const [confirmed,setConfirmed]=useState(false);
   const [positions,setPositions]=useState<Record<string,number>>({});
   const [busy,setBusy]=useState(false);
@@ -70,17 +72,33 @@ export function RobotModelBuilder({initial,onClose,onSetup}:{initial:RobotBuilde
     return <fieldset><legend>{label}</legend><div className="model-vector">{link[key].map((v,i)=><label key={i}>{['X','Y','Z'][i]}<input aria-label={`${label} ${['X','Y','Z'][i]}`} type="number" step=".01" value={v} onChange={e=>patchLink({[key]:link[key].map((n,j)=>j===i?Number(e.target.value):n) as Vector3})}/></label>)}</div></fieldset>;
   }
   const selectedBounds=selected.length?bounds(selected):null;
+  const renderLinkTree=(parent:string|null, depth=0):ReactNode[]=>model?.links.filter(l=>l.parent===parent).flatMap(l=>[
+    <button key={l.name} type="button" className={`model-tree-item ${l.name===active?'active':''}`} style={{paddingLeft:8+depth*18}} onClick={()=>setActive(l.name)} title={`Open ${l.name}`}>
+      <span>{l.parent===null?'●':'└─'}</span> {l.name} <small>{l.kind}</small>
+    </button>,
+    ...renderLinkTree(l.name,depth+1)
+  ])??[];
   return <dialog ref={dialog} className="model-builder" aria-label="Robot Model Builder" onCancel={e=>{e.preventDefault();if(!busy)onClose(model);}}>
     <header><h2>Robot Model Builder</h2><button disabled={busy} onClick={()=>onClose(model)}>Close</button></header>
-    <p>Import OBJ → select components → create rigid links → set joints → preview → export. STEP and texture import are not supported yet. Save the editable model before leaving Studio.</p>
-    <fieldset disabled={busy}><legend>Import geometry or resume a model</legend><div className="model-import">
+    <p>Recommended: import a STEP/STP CAD assembly → verify the component tree and frames → define joints → preview → export URDF. OBJ remains available as a fallback for mesh-only imports.</p>
+    <fieldset disabled={busy}><legend>CAD import (recommended)</legend><div className="model-import">
+      <label>STEP mesh deflection<input aria-label="STEP mesh deflection" type="number" min=".01" max="50" step=".01" value={stepDeflection} onChange={e=>setStepDeflection(Number(e.target.value))}/><small>Millimetres; smaller = finer mesh. Detailed assemblies are automatically simplified to fit the simulation budget.</small></label>
+      <label>STEP mesh angle<input aria-label="STEP mesh angle" type="number" min=".01" max="3.14159" step=".01" value={stepAngle} onChange={e=>setStepAngle(Number(e.target.value))}/><small>Radians; smaller = finer angular detail.</small></label>
+      <label>Import STEP / STP<input aria-label="Import STEP" type="file" accept=".step,.stp" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void action(async()=>{
+        if(model&&!window.confirm('Replace this model? Save the editable model first to keep it.'))return;
+        if(f.size>64*1024*1024)throw new Error('STEP exceeds 64 MiB. Increase mesh deflection or simplify the CAD assembly.');
+        const imported=await api.importModelStep(f,stepDeflection,stepAngle);
+        change(imported);setActive(imported.links[0].name);setSelected([]);setPositions({});setConfirmed(false);
+      });}}/></label>
+    </div><p className="builder-note">STEP preserves the CAD assembly placements. Imported components start as fixed joints; joint types and axes are deliberately left for you to verify rather than guessed from CAD constraints.</p></fieldset>
+    <fieldset disabled={busy}><legend>Mesh fallback / resume a model</legend><div className="model-import">
       <label>OBJ units<select aria-label="OBJ units" value={units} onChange={e=>setUnits(Number(e.target.value))}><option value={1}>Metres</option><option value={.01}>Centimetres</option><option value={.001}>Millimetres</option></select></label>
       <label><input type="checkbox" checked={split} onChange={e=>setSplit(e.target.checked)}/>Split disconnected parts within OBJ groups</label>
       <label>Import OBJ<input aria-label="Import OBJ" type="file" accept=".obj" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void action(async()=>{
         if(model&&!window.confirm('Replace this model? Save the editable model first to keep it.'))return;
         if(f.size>4*1024*1024)throw new Error('OBJ exceeds 4 MiB. Simplify it before import.');
         const imported=await api.importModelObj(await f.text(),split);imported.scale=units;
-        change(imported);setActive('base_link');setSelected([]);setPositions({});setConfirmed(false);
+        change(imported);setActive(imported.links[0].name);setSelected([]);setPositions({});setConfirmed(false);
       });}}/></label>
       <label>Open editable model<input aria-label="Open editable model" type="file" accept=".json" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void action(async()=>{
         if(model&&!window.confirm('Replace this model with the saved file?'))return;
@@ -94,11 +112,13 @@ export function RobotModelBuilder({initial,onClose,onSetup}:{initial:RobotBuilde
         <p>{previewing?'Updating preview…':previewError?'Preview is stale: correct the error below.':'Orthographic preview · lengths in metres · angles in radians'}</p>
         {previewError&&<p role="alert">{previewError}</p>}
         <fieldset disabled={busy}><legend>Scale and dimensions</legend>
-          <label>Metres per OBJ unit<input type="number" min=".000000001" step=".001" value={model.scale} onChange={e=>rescale(Number(e.target.value))}/></label>
+          <label>Metres per mesh unit<input type="number" min=".000000001" step=".001" value={model.scale} onChange={e=>rescale(Number(e.target.value))}/></label>
           {selectedBounds&&<p>Selection bounding box: {selectedBounds.size.map(v=>v.toFixed(5)).join(' × ')} m (source X/Y/Z)</p>}
           <label>Known selection dimension (m)<input aria-label="Known dimension" type="number" min=".000001" step=".001" value={calibration} onChange={e=>setCalibration(e.target.value)}/></label>
           <label>Measured direction<select value={calibrationAxis} onChange={e=>setCalibrationAxis(Number(e.target.value))}>{['X','Y','Z'].map((v,i)=><option key={v} value={i}>{v}</option>)}</select></label>
           <button disabled={!selectedBounds||selectedBounds.size[calibrationAxis]<=0||Number(calibration)<=0} onClick={()=>{if(selectedBounds)rescale(model.scale*Number(calibration)/selectedBounds.size[calibrationAxis]);}}>Calibrate scale</button>
+          {model.import_notes?.map((note,index)=><p key={index} role="status">{note}</p>)}
+          {model.source_format&&<p className="builder-source">Source: <strong>{model.source_format.toUpperCase()}</strong>{model.source_name?` · ${model.source_name}`:''}{model.source_unit?` · ${model.source_unit}`:''}</p>}
           <label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>I checked scale and the root frame orientation (+X forward, +Z up)</label>
         </fieldset>
         <fieldset><legend>Motion preview</legend><button onClick={()=>setPositions({})}>Reset to zero pose</button>
@@ -119,7 +139,7 @@ export function RobotModelBuilder({initial,onClose,onSetup}:{initial:RobotBuilde
         <button disabled={!selected.length||!link} onClick={()=>{if(link)change({...model,links:model.links.map(l=>({...l,mass:l.name===link.name||l.parts.some(p=>selected.includes(p))?null:l.mass,parts:l.name===link.name?[...new Set([...l.parts,...selected])]:l.parts.filter(p=>!selected.includes(p))}))});}}>Assign selection to active link</button>
         <button onClick={()=>setSelected([])}>Clear selection</button>
       </fieldset>
-      <fieldset disabled={busy}><legend>Links and joints</legend><label>Active link<select aria-label="Active link" value={active} onChange={e=>setActive(e.target.value)}>{model.links.map(l=><option key={l.name}>{l.name}</option>)}</select></label>
+      <fieldset disabled={busy}><legend>Links and joints</legend><div className="model-tree" aria-label="Robot assembly tree">{renderLinkTree(null)}</div><label>Active link<select aria-label="Active link" value={active} onChange={e=>setActive(e.target.value)}>{model.links.map(l=><option key={l.name}>{l.name}</option>)}</select></label>
         <button onClick={()=>addLink(true)}>Add empty sensor frame</button>
         {link&&<><label>Link name<input aria-label="Link name" value={link.name} onChange={e=>patchLink({name:e.target.value})}/></label>
           {link.parent!==null?<><label>Parent<select aria-label="Parent link" value={link.parent} onChange={e=>patchLink({parent:e.target.value})}>{model.links.filter(l=>l.name!==link.name).map(l=><option key={l.name}>{l.name}</option>)}</select></label>
@@ -134,7 +154,7 @@ export function RobotModelBuilder({initial,onClose,onSetup}:{initial:RobotBuilde
           </>}
           <label>Measured mass (kg, optional)<input type="number" min=".000001" step=".01" disabled={!link.parts.length} value={link.mass??''} onChange={e=>patchLink({mass:e.target.value===''?null:Number(e.target.value)})}/></label>
           <p>If mass is entered, inertia is estimated using a uniform bounding box. This is not a measured centre of mass or CAD inertia.</p>
-          <label>Collision approximation<select value={link.collision} onChange={e=>patchLink({collision:e.target.value as ModelLink['collision']})}><option value="box">Bounding box</option><option value="none">None</option></select></label>
+          <label>Collision approximation<select value={link.collision} onChange={e=>patchLink({collision:e.target.value as ModelLink['collision']})}><option value="box">Bounding box</option><option value="mesh">CAD mesh</option><option value="none">None</option></select></label>
           {link.parent&&<button onClick={()=>{if(!window.confirm('Merge this link into its parent and reparent its children?'))return;change({...model,links:model.links.filter(l=>l.name!==link.name).map(l=>({...l,parent:l.parent===link.name?link.parent:l.parent,mass:l.name===link.parent?null:l.mass,parts:l.name===link.parent?[...l.parts,...link.parts]:l.parts}))});setActive(link.parent!);setPositions({});}}>Merge link into parent</button>}
         </>}
       </fieldset></section>
