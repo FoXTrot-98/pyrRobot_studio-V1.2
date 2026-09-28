@@ -124,10 +124,7 @@ diagnostics. Ackermann, mecanum, legged motion, tilted scanners and full dynamic
 require additional models; arbitrary URDF files are not silently approximated.
 The simulator starts at (0, 0, 0); configuration rejects a colliding start.
 
-Exports now use project schema_version=2. Version 1 projects remain readable and
-receive the original reference configuration defaults. Old applications that
-only support version 1 should not open version 2 exports. External meshes and
-plugin source still are not bundled.
+Mesh-free exports use project schema_version=2; exports with embedded Model Builder meshes use version 3. Versions 1 and 2 remain readable, with version 1 receiving the original reference configuration defaults. Version 3 carries builder meshes, normals and display colors; plugin source, dependencies and arbitrary external assets remain separate. Use matching Studio/runtime revisions for version 3 projects. See [Model to simulation](MODEL_TO_SIMULATION.md).
 
 ## Optimization and verification
 

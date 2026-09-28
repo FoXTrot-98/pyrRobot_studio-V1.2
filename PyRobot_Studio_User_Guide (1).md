@@ -1,3 +1,5 @@
+> Historical guide: retained for reference. Use [README](README.md) for current installation, supported versions and capabilities, and [Baseline verification](docs/BASELINE.md) for acceptance checks. The prerequisites and phase descriptions below describe an earlier revision.
+
 # PyRobot Studio — User Guide
 
 This guide walks through installing, running, and actually using PyRobot Studio: the backend, the Studio UI, the 3D/SLAM viewport, and building your own plugins.

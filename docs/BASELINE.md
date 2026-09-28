@@ -1,5 +1,7 @@
 # Reproducible engineering baseline
 
+See the [verification record](BASELINE_VERIFICATION.md) for the tested revision, environment, results and known limits.
+
 The root [README](../README.md) is the setup entry point. Feature guides describe
 current behavior; old phase labels and version-1-only limitations are not the
 current project status. This baseline includes STEP import, assembly placement,
@@ -38,10 +40,14 @@ node tests/modelSurface.mjs
 cd ..
 ```
 
+The standalone CLI commands use default broker ports 5555/5556. Stop your other Studio runtime first, or set `PYROBOT_BUS_PUB` and `PYROBOT_BUS_SUB` to separate free loopback endpoints for the CLI process. Do not stop an unrelated running session just to free ports.
+
 The Python runner uses isolated processes and bus ports, with a 60-second limit
 per test script. On Windows it reports the expected POSIX pseudo-terminal skip;
 serial loopback is still tested. Lint currently reports three warnings in
 GridToolbar, useGraph and PluginBuilder; warnings are not build failures.
+
+Run the optional browser check after the Python suite, not concurrently with its timing-sensitive subprocess tests.
 
 Optional browser verification (requires Edge):
 
