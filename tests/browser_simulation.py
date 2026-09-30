@@ -59,8 +59,14 @@ def main():
                 page.locator('input[accept=".json,.pyrobot"]').set_input_files(str(ROOT/"examples/four-wheel/teleoperation.pyrobot.json"))
                 page.evaluate("""() => {
                     window.robotMessages = {};
+                    window.robotHistory = [];
                     window.robotSocket = new WebSocket('ws://127.0.0.1:8011/ws/bus');
-                    window.robotSocket.onmessage = (event) => { const m=JSON.parse(event.data); window.robotMessages[m.topic]=m.payload; };
+                    window.robotSocket.onmessage = (event) => { const m=JSON.parse(event.data); window.robotMessages[m.topic]=m.payload;
+                        if (['node/nav/out/path','node/sim/out/truth'].includes(m.topic)) {
+                            window.robotHistory.push({topic:m.topic,payload:m.payload,command:window.robotMessages['node/drive/out/cmd_vel']});
+                            if(window.robotHistory.length>1500) window.robotHistory.shift();
+                        }
+                    };
                 }""")
                 page.get_by_role("button",name="Start Graph",exact=True).click()
                 page.get_by_role("button",name="Stop Graph",exact=True).wait_for()
@@ -69,6 +75,12 @@ def main():
                 assert panel.is_visible()
                 frame = page.frame_locator('iframe[title="Rerun robot simulation"]')
                 frame.locator("canvas").first.wait_for(timeout=30000)
+                with page.expect_response(lambda response: response.request.method == "PATCH" and "/nodes/nav/params" in response.url) as home_update:
+                    page.get_by_role("button",name="Set home here",exact=True).click()
+                assert home_update.value.ok
+                page.wait_for_function("window.robotMessages['node/nav/out/path']?.status === 'paused'")
+                saved_home=page.request.get('http://127.0.0.1:8011/api/graph').json()
+                assert len(next(n for n in saved_home['nodes'] if n['node_id']=='nav')['params']['home_pose'])==3
                 page.get_by_role("button",name="Manual",exact=True).click()
                 pad = page.get_by_role("group",name="Keyboard driving pad")
                 page.wait_for_function("document.querySelector('.keyboard-pad')?.innerText.includes('Click here')")
@@ -81,13 +93,46 @@ def main():
                 page.keyboard.up("w")
                 print("PASS: keyboard press and focus-loss stop", flush=True)
                 page.get_by_role("button",name="Stop",exact=True).click()
+                # Mixed manual/autonomous driving is the default regression.
+                # An explicit restart remains available for isolated comparisons.
+                if '--restart-after-manual' in sys.argv:
+                    page.get_by_role("button",name="Stop Graph",exact=True).click()
+                    page.get_by_role("button",name="Start Graph",exact=True).click()
+                    page.get_by_role("button",name="Stop Graph",exact=True).wait_for()
+                    page.wait_for_timeout(10000)
+                page.get_by_role("tab",name="Settings",exact=True).click()
+                for label, value in (("Planner","dijkstra"),("Controller","fuzzy")):
+                    with page.expect_response(lambda response: response.request.method == "PATCH" and "/nodes/nav/params" in response.url) as update:
+                        page.get_by_label(label,exact=True).select_option(value)
+                    assert update.value.ok
+                page.wait_for_function("window.robotMessages['node/nav/out/path']?.planner === 'dijkstra' && window.robotMessages['node/nav/out/path']?.controller === 'fuzzy'")
+                page.get_by_role("tab",name="Navigate",exact=True).click()
                 measured_map = page.get_by_role("img",name="Click SLAM map to add waypoint")
                 box = measured_map.bounding_box()
                 for x,y in ((.8,0),(.8,.8)):
                     measured_map.click(position={"x":(x+2.4)/(.12*108)*box["width"],
                         "y":(1-(y+2.4)/(.12*91))*box["height"]})
                 page.get_by_role("button",name="Run waypoints",exact=True).click()
-                page.wait_for_function("window.robotMessages['node/nav/out/path']?.status === 'mission_complete'", timeout=60000)
+                page.wait_for_function("['mission_complete','navigation_failed','stalled'].includes(window.robotMessages['node/nav/out/path']?.status)", timeout=60000)
+                navigation = page.evaluate("window.robotMessages['node/nav/out/path']")
+                (artifacts/'browser-navigation-history.json').write_text(json.dumps(page.evaluate("window.robotHistory")),encoding='utf-8')
+                if navigation['status'] != 'mission_complete':
+                    (artifacts/'browser-navigation-failure.json').write_text(json.dumps(page.evaluate("window.robotMessages")),encoding='utf-8')
+                assert navigation['status'] == 'mission_complete', navigation
+                assert page.evaluate("window.robotMessages['node/sim/out/truth'].collisions") == 0
+                page.get_by_role("button",name="Return home",exact=True).click()
+                page.wait_for_function("window.robotMessages['node/nav/out/path']?.status === 'home_reached'",timeout=90000)
+                page.get_by_text('Home reached. Robot stopped; this does not perform docking.').wait_for(state='visible')
+                print('PASS: algorithm selectors, Dijkstra/fuzzy outbound mission, return home and heading alignment',flush=True)
+                page.get_by_role("tab",name="Maps",exact=True).click()
+                page.get_by_label("Map name",exact=True).fill("Browser room")
+                page.get_by_role("button",name="Capture map",exact=True).click()
+                page.get_by_role("img",name="Saved occupancy map",exact=True).wait_for()
+                mapped_project=page.request.post("http://127.0.0.1:8011/api/project/export",data={"name":"Mapped browser robot","positions":{}}).json()
+                assert mapped_project['schema_version']==4
+                assert mapped_project['saved_maps']['slam']['name']=='Browser room'
+                page.screenshot(path=str(artifacts/"map-workspace.png"),full_page=True)
+                page.get_by_role("tab",name="Navigate",exact=True).click()
                 page.screenshot(path=str(artifacts/"four-wheel-studio.png"),full_page=True)
                 print("Simulation status:",page.locator(".simulation-status").inner_text())
                 page.get_by_role("button",name="Pause motion",exact=True).click()
@@ -98,8 +143,29 @@ def main():
                 page.get_by_role("button",name="Navigate",exact=True).click()
                 page.wait_for_timeout(700)
                 assert "paused" not in page.locator(".simulation-status").inner_text()
+                page.get_by_role("button",name="Cancel mission",exact=True).click()
+                page.wait_for_function("window.robotMessages['node/nav/out/path']?.mission_state === 'cancelled'")
+                page.get_by_role("button",name="Navigate",exact=True).click()
+                page.wait_for_function("window.robotMessages['node/nav/out/path']?.mission_state === 'running'")
                 page.get_by_role("button",name="Stop Graph",exact=True).click()
                 page.get_by_role("button",name="Start Graph",exact=True).wait_for()
+                saved_path=artifacts/'browser-mapped.project.json'
+                saved_path.write_text(json.dumps(mapped_project),encoding='utf-8')
+                page.locator('input[accept=".json,.pyrobot"]').set_input_files(str(saved_path))
+                page.get_by_role("tab",name="Maps",exact=True).click()
+                page.get_by_role("img",name="Saved occupancy map",exact=True).wait_for()
+                with page.expect_response(lambda response: response.request.method=="POST" and response.url.endswith('/maps/nav/initialize')) as initialized:
+                    page.get_by_role("button",name="Confirm starting pose",exact=True).click()
+                assert initialized.value.ok
+                page.get_by_role("button",name="Start Graph",exact=True).click()
+                page.get_by_role("button",name="Stop Graph",exact=True).wait_for()
+                page.wait_for_timeout(2000)
+                assert page.request.get('http://127.0.0.1:8011/api/graph').json()['running']
+                page.get_by_role("button",name="Stop Graph",exact=True).click()
+                page.get_by_role("button",name="Start Graph",exact=True).wait_for()
+                page.get_by_role("button",name="Remove saved map and reset home",exact=True).click()
+                page.get_by_role("img",name="Saved occupancy map",exact=True).wait_for(state='detached')
+                print('PASS: map capture, version 4 export/open, pose confirmation, restored-map startup and removal',flush=True)
                 page.get_by_role("button",name="Robot configuration",exact=True).click()
                 editor = page.get_by_label("Robot configuration JSON", exact=True)
                 configuration = json.loads(editor.input_value())
@@ -117,7 +183,7 @@ def main():
                 assert page.locator('.studio-node [role="status"]').count() == 7
                 assert not errors, errors
                 browser.close()
-                print("PASS: keyboard focus/release, map-click waypoint mission, Rerun, pause/resume, configuration and preflight")
+                print("PASS: keyboard focus/release, map-click waypoint mission, Rerun, pause/resume, mission cancellation/replacement, configuration and preflight")
     finally:
         for process in reversed(processes):
             process.terminate()

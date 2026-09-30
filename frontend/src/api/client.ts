@@ -39,7 +39,17 @@ async function request<T>(path: string, init?: RequestInit, binary = false): Pro
   return (binary ? res.blob() : res.json()) as Promise<T>;
 }
 
+export interface MapInfo {
+  snapshot: { name: string; grid: number[][]; origin: number[]; resolution: number; captured_pose: number[]; home_poses: Record<string,number[]> } | null;
+  start_pose: number[] | null;
+  can_capture: boolean;
+}
+
 export const api = {
+  getMap: (nodeId: string) => request<MapInfo>(`/api/project/maps/${encodeURIComponent(nodeId)}`),
+  captureMap: (nodeId: string, name: string) => request<MapInfo>(`/api/project/maps/${encodeURIComponent(nodeId)}`, {method:"POST",body:JSON.stringify({name})}),
+  initializeMap: (nodeId: string, pose: number[]) => request<MapInfo>(`/api/project/maps/${encodeURIComponent(nodeId)}/initialize`, {method:"POST",body:JSON.stringify({pose})}),
+  clearMap: (nodeId: string) => request<MapInfo>(`/api/project/maps/${encodeURIComponent(nodeId)}`, {method:"DELETE"}),
   modelSetup: (model:RobotBuilderModel) => request<RobotPackage>('/api/model-builder/setup',{method:'POST',body:JSON.stringify(model)}),
   importBuilderBundle: (file:File) => {const form=new FormData();form.append('file',file);return request<RobotPackage>('/api/robot/setup/bundle',{method:'POST',body:form});},
   importModelObj: (text:string, split:boolean) => request<RobotBuilderModel>('/api/model-builder/import-obj',{method:'POST',body:JSON.stringify({text,split})}),
@@ -133,7 +143,7 @@ export interface BuilderTest { id: string; status: string; result?: {ok: boolean
 
 export function busWebSocketUrl(): string {
   const wsBase = BASE_URL.replace(/^http/, "ws");
-  return `${wsBase}/ws/bus`;
+  return `${wsBase}/ws/bus?preview=true`;
 }
 
 export function controlWebSocketUrl(nodeId: string, runId: string): string {

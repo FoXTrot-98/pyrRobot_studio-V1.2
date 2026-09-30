@@ -138,3 +138,32 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .waypoint-map canvas, .waypoint-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .waypoint-map canvas { image-rendering: pixelated; }
 .waypoint-map svg { cursor: crosshair; }
+
+/* Simulation workspace: flat surfaces, visible grouping, and consistent controls. */
+.simulation-panel { border: 1px solid #c7d1df; background: #f5f7fb; box-shadow: none; border-radius: 10px; height: 60vh; min-height: 360px; }
+.simulation-controls { background: #fff; border-bottom: 1px solid #dce3ec; gap: 8px; }
+.simulation-controls > strong { margin-right: auto; font-size: 14px; }
+.simulation-status { padding: 5px 8px; border-radius: 6px; background: #edf2f8; color: #31435d; }
+.navigation-controls { width: 360px; padding: 12px; background: #f5f7fb; border-left: 1px solid #dce3ec; color: #24344c; }
+.simulation-tabs { display: flex; gap: 4px; padding: 4px; background: #e6ecf4; border-radius: 8px; margin: 10px 0 12px; }
+.simulation-tabs button { flex: 1; border: 0; background: transparent; margin: 0; padding: 9px 8px; }
+.simulation-tabs button[aria-selected="true"] { background: #fff; color: #164b9b; font-weight: 650; box-shadow: 0 1px 3px #182d4d18; }
+.control-card { padding: 14px; margin: 0 0 12px; border: 1px solid #dce3ec; border-radius: 9px; background: #fff; }
+.control-card h3 { margin: 0 0 8px; font-size: 13px; color: #182b46; }
+.control-card p, .map-empty p { line-height: 1.55; color: #52637b; }
+.control-card label { display: flex; flex-direction: column; gap: 5px; margin: 10px 0; font-size: 11px; font-weight: 600; }
+.control-card input, .control-card select { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px; border: 1px solid #bac8da; border-radius: 6px; background: #fff; color: #24344c; }
+.navigation-controls button { min-height: 32px; padding: 7px 10px; background: #f8fafc; color: #263b57; border-color: #c5d1e0; }
+.navigation-controls button:disabled { opacity: .5; cursor: not-allowed; }
+.navigation-controls .primary-action { background: #245ac1; border-color: #245ac1; color: #fff; }
+.navigation-controls button:focus-visible, .navigation-controls input:focus-visible, .navigation-controls select:focus-visible { outline: 2px solid #245ac1; outline-offset: 2px; }
+.card-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.state-chip { font-size: 10px; padding: 3px 6px; background: #edf2f8; border-radius: 4px; white-space: nowrap; }
+.pose-fields { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.map-empty { padding: 20px 12px; text-align: center; border: 1px dashed #bdcadb; border-radius: 8px; }
+@media (max-width: 1000px) { .simulation-views { flex-direction: column; overflow-y: auto; } .simulation-views iframe { flex: none; min-height: 260px; } .navigation-controls { width: auto; flex-shrink: 0; border-left: 0; } }
+
+.goal-fields { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
+.goal-fields label { flex: 1; min-width: 60px; }
+.goal-fields input { width: 100%; }
+.goal-fields button { margin-bottom: 10px; }

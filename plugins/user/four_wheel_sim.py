@@ -58,8 +58,9 @@ class FourWheelSimulation(Node):
 
     def _run(self):
         frame = 0
+        deadline = time.monotonic() + .1 / self.get_param("speed", 1.0)
         try:
-            while not self._stop.wait(.1 / self.get_param("speed", 1.0)):
+            while not self._stop.wait(max(0., deadline - time.monotonic())):
                 with self._command_lock:
                     linear, angular, received = self._command
                 if time.monotonic()-received > .6:
@@ -86,6 +87,12 @@ class FourWheelSimulation(Node):
                             "width": image.shape[1], "height": image.shape[0], "time": self.sim.time,
                             "frame": drive.camera_frame, "source": "geometric-simulation"}, **metadata)
                 frame += 1
+                # Include sensor/render work in the frame budget. Never burst
+                # old frames to catch up when the machine is overloaded.
+                period = .1 / self.get_param("speed", 1.0)
+                deadline += period
+                if deadline < time.monotonic():
+                    deadline = time.monotonic() + period
         except Exception as exc:
             self.fail(exc)
             self.log.exception("Simulation failed")

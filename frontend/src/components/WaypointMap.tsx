@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { BusMessage } from "../types";
 
-export function WaypointMap({ message, points, path, onAdd }: {
-  message?: BusMessage; points: number[][]; path?: unknown;
+export function WaypointMap({ message, points, path, onAdd, readOnly = false }: {
+  readOnly?: boolean; message?: BusMessage; points: number[][]; path?: unknown;
   onAdd: (point: number[]) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -28,8 +28,9 @@ export function WaypointMap({ message, points, path, onAdd }: {
   const robot = pose ? cell(pose) : null;
   return <div className="waypoint-map" style={{ aspectRatio: `${width}/${height}` }}>
     <canvas ref={canvas} width={width} height={height} />
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Click SLAM map to add waypoint"
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={readOnly ? "Saved occupancy map" : "Click SLAM map to add waypoint"} style={{cursor: readOnly ? "default" : "crosshair"}}
       onClick={(event) => {
+        if (readOnly) return;
         const rect = event.currentTarget.getBoundingClientRect();
         const col = Math.min(width - 1, Math.max(0, Math.floor((event.clientX - rect.left) / rect.width * width)));
         const row = Math.min(height - 1, Math.max(0, Math.floor((1 - (event.clientY - rect.top) / rect.height) * height)));

@@ -1,5 +1,7 @@
 """Optional real Webots test. Starts and closes only its own simulator process."""
 import os
+import argparse
+import json
 import socket
 import sys
 import time
@@ -20,10 +22,17 @@ from core.runtime.project import ProjectDocument
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--project', type=Path)
+    parser.add_argument('--mesh', action='store_true')
+    parser.add_argument('--return-home', action='store_true')
+    parser.add_argument('--planner', choices=['astar','dijkstra'], default='astar')
+    parser.add_argument('--controller', choices=['proportional','fuzzy'], default='proportional')
+    args = parser.parse_args()
     doc = ProjectDocument.model_validate_json((ROOT/"examples/four-wheel/webots.pyrobot.json").read_text())
-    if '--project' in sys.argv:
-        doc = ProjectDocument.model_validate_json(Path(sys.argv[sys.argv.index('--project')+1]).read_text(encoding='utf-8'))
-    if '--mesh' in sys.argv:
+    if args.project:
+        doc = ProjectDocument.model_validate_json(args.project.read_text(encoding='utf-8'))
+    if args.mesh:
         from core.urdf.builder import Model
         from core.urdf.assets import builder_package
         package=builder_package(Model.model_validate_json((ROOT/'examples/model-builder/four-wheel-rover.robot-builder.json').read_text()))
@@ -31,6 +40,9 @@ def main():
         doc.robot_config.drive.wheel_radius=.12
     for node in doc.nodes:
         if node.node_id == "sim": node.params["minimize"] = True
+        if node.node_id == "nav":
+            node.params.update(planner=args.planner, controller=args.controller)
+    print(f"Algorithms: {args.planner} / {args.controller}", flush=True)
     with Runtime() as runtime:
         runtime.load_project(doc)
         received = {}
@@ -68,10 +80,28 @@ def main():
         runtime.graph.update_node_params("nav", {"waypoints":[[.8,0],[.8,1]],"enabled":True})
         runtime.graph.update_node_params("drive", {"mode":"autonomous"})
         wait(lambda: received.get("node/nav/out/path",{}).get("status")=="mission_complete", 90)
+        report = received["node/nav/out/path"]
+        assert report["planner"] == args.planner and report["controller"] == args.controller
         truth = received["node/sim/out/truth"]
         print("Final pose:", truth["pose"], "contacts:", truth["collisions"], flush=True)
         assert math.dist(truth["pose"][:2],[.8,1]) < .4
         assert truth["collisions"] == 0
+        if args.return_home:
+            home = received['node/nav/out/path']['home_pose']
+            runtime.graph.update_node_params('nav', {'return_home':True, 'enabled':True})
+            wait(lambda: received.get('node/nav/out/path',{}).get('status')=='home_reached',90)
+            truth=received['node/sim/out/truth']
+            assert math.dist(truth['pose'][:2],home[:2]) < .4
+            error=(truth['pose'][2]-home[2]+math.pi)%(2*math.pi)-math.pi
+            assert abs(error)<.2
+            assert truth['collisions']==0
+            print('PASS return home:',truth['pose'],'home:',home,flush=True)
+        result = dict(planner=args.planner, controller=args.controller,
+                      project=str(args.project or "examples/four-wheel/webots.pyrobot.json"),
+                      return_home=args.return_home, pose=truth['pose'], collisions=truth['collisions'],
+                      status=received['node/nav/out/path']['status'])
+        output = ROOT/'artifacts'/f'webots-{args.planner}-{args.controller}.json'
+        output.write_text(json.dumps(result,indent=2),encoding='utf-8')
         runtime.graph.stop()
         handle.close()
         assert simulator._process.poll() is not None

@@ -1,6 +1,7 @@
 """Rerun sink: truth is used only for visualization and error comparison."""
 import base64
 import math
+import time
 import cv2
 import numpy as np
 import rerun as rr
@@ -39,6 +40,8 @@ class SimulationRerunView(WorkerNode):
         self.trajectory = []
         self._world_logged = False
         self._frames = 0
+        self._last_log = {}
+        self._fixed_logged = set()
         self._chains = {name: [(joint, origin_matrix(joint.origin)) for joint in self.robot_model.path_to_root(name)]
                         for name in self.robot_model.links}
         base = np.eye(4)
@@ -57,7 +60,10 @@ class SimulationRerunView(WorkerNode):
             rrb.Vertical(rrb.Spatial2DView(origin="/camera", name="Simulated camera"),
                          rrb.Spatial2DView(origin="/map", name="Measured occupancy map"),
                          rrb.TextDocumentView(origin="/navigation", name="Navigation status")),
-            column_shares=[3, 1.2]), collapse_panels=True))
+            column_shares=[3, 1.2]),
+            # Simulation time restarts at zero on each run. Follow wall log
+            # time so a restarted run cannot sit behind an older run's end.
+            rrb.TimePanel(timeline="log_time", play_state="following"), collapse_panels=True))
         self._log_robot_geometry()
         self.start_worker()
 
@@ -84,6 +90,13 @@ class SimulationRerunView(WorkerNode):
                     rr.log(entity+"/spoke", rr.LineStrips3D([[[0,0,.052],[radius,0,.052]]], colors=[240,240,245], radii=.008), static=True)
 
     def process(self, port, payload):
+        # Bound live-view work independently of simulator speed. Control and
+        # mapping still receive every observation through their own ports.
+        now = time.monotonic()
+        interval = {"truth": .045, "state": .19, "path": .19, "camera": .19}.get(port, 0.)
+        if now - self._last_log.get(port, -float("inf")) < interval:
+            return
+        self._last_log[port] = now
         rr.set_time("simulation_time", duration=payload["time"])
         if port == "truth":
             self.truth = payload
@@ -101,6 +114,9 @@ class SimulationRerunView(WorkerNode):
             rr.log("simulation/robot", rr.Transform3D(translation=[x,y,0], rotation=rr.RotationAxisAngle([0,0,1], radians=yaw)))
             angles = dict(zip(payload["joint_names"], payload["wheels"]))
             for name in self.robot_model.links:
+                fixed = all(joint.name not in angles for joint, _ in self._chains[name])
+                if fixed and name in self._fixed_logged:
+                    continue
                 matrix = self._base_inverse.copy()
                 for joint, origin in self._chains[name]:
                     matrix = matrix @ origin
@@ -114,17 +130,20 @@ class SimulationRerunView(WorkerNode):
                         rotation = np.eye(4)
                         rotation[:3,:3] = c*np.eye(3)+(1-c)*np.outer(axis,axis)+s*skew
                         matrix = matrix @ rotation
-                rr.log(f"simulation/robot/{name}", rr.Transform3D(translation=matrix[:3,3],mat3x3=matrix[:3,:3]))
+                rr.log(f"simulation/robot/{name}", rr.Transform3D(translation=matrix[:3,3],mat3x3=matrix[:3,:3]), static=fixed)
+                if fixed:
+                    self._fixed_logged.add(name)
         elif port == "camera":
-            image = cv2.imdecode(np.frombuffer(base64.b64decode(payload["jpeg_base64"]), dtype=np.uint8),cv2.IMREAD_COLOR)
-            rr.log("camera/image", rr.Image(cv2.cvtColor(image,cv2.COLOR_BGR2RGB)))
+            rr.log("camera/image", rr.EncodedImage(contents=base64.b64decode(payload["jpeg_base64"]), media_type="image/jpeg"))
         elif port == "state":
             self.estimate = payload
             pose = payload["pose"]
             rr.log("simulation/estimated_pose", rr.Boxes3D(centers=[[pose[0],pose[1],.3]],sizes=[[.82,.62,.28]],
                 rotation_axis_angles=[rr.RotationAxisAngle([0,0,1], radians=pose[2])],colors=[255,209,75],fill_mode=rr.components.FillMode.MajorWireframe))
-            self.trajectory.append([pose[0],pose[1],.06]);self.trajectory=self.trajectory[-2000:]
-            rr.log("simulation/estimated_trail", rr.LineStrips3D([self.trajectory],colors=[255,203,74],radii=.025))
+            if not self.trajectory or math.dist(pose[:2], self.trajectory[-1][:2]) >= .04:
+                self.trajectory.append([pose[0],pose[1],.06])
+                self.trajectory = self.trajectory[-1000:]
+                rr.log("simulation/estimated_trail", rr.LineStrips3D([self.trajectory],colors=[255,203,74],radii=.025))
             scan = payload["scan"]
             mount = sensor_pose(pose, scan["offset"])
             angles = np.asarray(scan["angles"])+mount[2]

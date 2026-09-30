@@ -16,16 +16,27 @@ class CommandSelector(Node):
         super().__init__(**kwargs)
         self._command_lock = threading.RLock()
         self._commands = {}
+        self._mode_since = None
 
     def on_start(self):
         self._commands.clear()
+        self._mode_since = self.bus._clock.now().epoch_ns
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name=self.node_id, daemon=True)
         self._thread.start()
 
     def on_message(self, port, message):
         with self._command_lock:
-            self._commands[port] = (time.monotonic(), message)
+            publication = message.published_timestamp or message.timestamp
+            age = self.bus._clock.now().delta(publication)
+            if (self._mode_since is not None and publication.epoch_ns <= self._mode_since) or not 0 <= age < .4:
+                return
+            previous = self._commands.get(port)
+            if previous:
+                previous_stamp = previous[1].published_timestamp or previous[1].timestamp
+                if publication.epoch_ns <= previous_stamp.epoch_ns:
+                    return
+            self._commands[port] = (time.monotonic()-age, message)
 
     def _publish(self):
         mode = self.get_param("mode", "stopped")
@@ -45,8 +56,14 @@ class CommandSelector(Node):
         except Exception as exc:
             self.fail(exc)
 
+    def update_params(self, updates):
+        # Protect the parameter mutation itself, not just its notification.
+        with self._command_lock:
+            super().update_params(updates)
+
     def on_params_changed(self, updated):
         with self._command_lock:
+            self._mode_since = self.bus._clock.now().epoch_ns
             self._commands.clear()
             self._publish()
 

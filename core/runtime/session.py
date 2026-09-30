@@ -169,6 +169,74 @@ class Runtime:
             self.positions = {k: v.model_dump() for k, v in document.positions.items()}
             return self.project_info()
 
+    def _mapping_node(self, nav_id):
+        nav=self.graph.nodes.get(nav_id)
+        if nav is None or nav.plugin_id != "pyrobot.navigation.astar":
+            raise GraphError("Select a navigation node")
+        connections=[c for c in self.graph.connections.values() if c.to_node==nav_id and c.to_port=="state"]
+        if len(connections)!=1:
+            raise GraphError("Connect a SLAM map to navigation first")
+        source=self.graph.nodes[connections[0].from_node]
+        if source.plugin_id != "pyrobot.navigation.lidar_slam":
+            raise GraphError("Map snapshots require the local lidar SLAM node")
+        return source.node_obj
+
+    def map_info(self, nav_id):
+        with self.lock:
+            node=self._mapping_node(nav_id)
+            return {"snapshot":node.saved_map.model_dump(mode="json") if node.saved_map else None,
+                    "start_pose":node.map_start_pose,
+                    "can_capture":node._latest_state is not None}
+
+    def capture_map(self, nav_id, name):
+        with self.lock:
+            node=self._mapping_node(nav_id)
+            homes={}
+            for c in self.graph.connections.values():
+                if c.from_node==node.node_id and c.to_port=="state":
+                    target=self.graph.nodes[c.to_node]
+                    if target.plugin_id=="pyrobot.navigation.astar":
+                        with target.node_obj._control_lock:
+                            if target.node_obj._home_pose is not None:
+                                homes[c.to_node]=list(target.node_obj._home_pose)
+            node.saved_map=node.snapshot(name,homes)
+            node.map_start_pose=None
+            return self.map_info(nav_id)
+
+    def initialize_map(self, nav_id, pose):
+        import math
+        with self.lock:
+            if self.graph.to_dict()["running"]:
+                raise GraphError("Stop the graph before initializing a saved map")
+            node=self._mapping_node(nav_id)
+            snapshot=node.saved_map
+            if snapshot is None:
+                raise GraphError("Capture or open a saved map first")
+            snapshot.check_config(self.graph.robot_config)
+            if len(pose)!=3 or not all(math.isfinite(v) for v in pose):
+                raise GraphError("Starting pose must contain three finite coordinates")
+            x,y=[math.floor((pose[i]-snapshot.origin[i])/snapshot.resolution) for i in (0,1)]
+            if not (0 <= y < len(snapshot.grid) and 0 <= x < len(snapshot.grid[0]) and snapshot.grid[y][x]==0):
+                raise GraphError("Starting pose must be in measured free space")
+            from core.simulation.navigation import plan_path
+            if not plan_path(snapshot.grid,snapshot.origin,snapshot.resolution,pose,pose[:2],radius=self.graph.robot_config.mapping.inflation_radius):
+                raise GraphError("Starting pose is too close to mapped obstacles")
+            node.map_start_pose=list(pose)
+            return self.map_info(nav_id)
+
+    def clear_map(self, nav_id):
+        with self.lock:
+            if self.graph.to_dict()["running"]:
+                raise GraphError("Stop the graph before removing a saved map")
+            node=self._mapping_node(nav_id)
+            node.saved_map=None
+            node.map_start_pose=None
+            node._latest_state=None
+            for c in self.graph.connections.values():
+                if c.from_node==node.node_id and c.to_port=="state" and self.graph.nodes[c.to_node].plugin_id=="pyrobot.navigation.astar":
+                    self.graph.update_node_params(c.to_node,{"home_pose":[],"enabled":False})
+            return self.map_info(nav_id)
+
     def export(self, name=None, positions=None):
         with self.lock:
             positions = self.positions if positions is None else positions

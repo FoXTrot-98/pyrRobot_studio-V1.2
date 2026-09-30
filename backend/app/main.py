@@ -453,6 +453,45 @@ def get_project():
     return runtime.project_info()
 
 
+class MapCaptureRequest(BaseModel):
+    name: str = Field(default="Saved map",min_length=1,max_length=100)
+
+
+class MapPoseRequest(BaseModel):
+    pose: tuple[float,float,float]
+
+
+def map_operation(action, *args):
+    try:
+        return action(*args)
+    except (GraphError, ValueError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@app.get("/api/project/maps/{nav_id}")
+@serialized
+def get_map(nav_id: str):
+    return map_operation(runtime.map_info,nav_id)
+
+
+@app.post("/api/project/maps/{nav_id}")
+@serialized
+def capture_map(nav_id: str, request: MapCaptureRequest):
+    return map_operation(runtime.capture_map,nav_id,request.name)
+
+
+@app.post("/api/project/maps/{nav_id}/initialize")
+@serialized
+def initialize_map(nav_id: str, request: MapPoseRequest):
+    return map_operation(runtime.initialize_map,nav_id,request.pose)
+
+
+@app.delete("/api/project/maps/{nav_id}")
+@serialized
+def clear_map(nav_id: str):
+    return map_operation(runtime.clear_map,nav_id)
+
+
 @app.post("/api/project/export")
 @serialized
 def save_project(req: ExportRequest):
@@ -510,15 +549,24 @@ async def ws_control(websocket: WebSocket, node_id: str, run_id: str):
 async def ws_bus(websocket: WebSocket):
     await websocket.accept(subprotocol="pyrobot" if "pyrobot" in websocket.scope.get("subprotocols", []) else None)
     loop = asyncio.get_running_loop()
+    pending = {}
+    preview = websocket.query_params.get("preview") == "true"
     queue = asyncio.Queue(maxsize=128)
     active = True
 
     def enqueue(payload):
         if not active:
             return
-        if queue.full():
-            queue.get_nowait()  # UI previews favor fresh data over stale backlog.
-        queue.put_nowait(payload)
+        if not preview:
+            if queue.full():
+                queue.get_nowait()
+            queue.put_nowait(payload)
+            return
+        # A slow browser needs the latest value of each topic, not a FIFO of
+        # obsolete camera frames and occupancy grids.
+        pending[payload["topic"]] = payload
+        if len(pending) > 256:
+            del pending[next(iter(pending))]
 
     def on_message(msg):
         if active and not loop.is_closed():
@@ -533,7 +581,15 @@ async def ws_bus(websocket: WebSocket):
 
     async def send_messages():
         while True:
-            await websocket.send_json(await queue.get())
+            if not preview:
+                await websocket.send_json(await queue.get())
+                continue
+            await asyncio.sleep(.1)
+            topics = list(pending)
+            for topic in topics:
+                payload = pending.pop(topic, None)
+                if payload is not None:
+                    await websocket.send_json(payload)
 
     async def receive_disconnect():
         while True:

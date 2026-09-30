@@ -136,12 +136,14 @@ class LidarSlam:
                 "mapped_cells": int(np.count_nonzero(occupancy >= 0)), "algorithm": "encoder + local point-to-plane scan-to-submap ICP"}
 
 
-def plan_path(grid, origin, resolution, start, goal, radius=.65):
-    """8-connected A* with obstacle inflation and no diagonal corner cutting.
+def plan_path(grid, origin, resolution, start, goal, radius=.65, algorithm="astar", known_only=False):
+    """8-connected A*/Dijkstra with inflation and no diagonal corner cutting.
 
     Unknown space is traversable at higher cost; the local lidar stop guards the
     robot as new obstacles become visible. Occupancy comes only from measured scans.
     """
+    if algorithm not in ("astar", "dijkstra"):
+        raise ValueError("Unknown planner: " + str(algorithm))
     grid, origin = np.asarray(grid), np.asarray(origin)
     height, width = grid.shape
     cells = int(math.ceil(radius/resolution))
@@ -150,13 +152,35 @@ def plan_path(grid, origin, resolution, start, goal, radius=.65):
     # could mark the robot's current cell blocked on the next noisy scan.
     kernel = (offsets[:, None]**2+offsets[None, :]**2 <= radius**2).astype(np.uint8)
     blocked = cv2.dilate((grid >= 50).astype(np.uint8), kernel).astype(bool)
+    if known_only:
+        blocked |= grid < 0
     def cell(point):
         return tuple(np.floor((np.asarray(point[:2])-origin)/resolution).astype(int))
+    start_pose = np.asarray(start[:2], dtype=float)
     start, goal = cell(start), cell(goal)
     def valid(p):
         return 0 <= p[0] < width and 0 <= p[1] < height and not blocked[p[1], p[0]]
-    if not valid(start) or not valid(goal):
+    if not valid(goal) or not (0 <= start[0] < width and 0 <= start[1] < height):
         return []
+    recover_start = not valid(start)
+    obstacle_points = None
+    if recover_start:
+        # A continuous pose can be clear while its rounded cell centre is not.
+        # Never exempt actual occupied/unknown starts or reduce the radius.
+        if not 0 <= grid[start[1],start[0]] < 50:
+            return []
+        obstacle_points = origin + (np.argwhere(grid >= 50)[:, ::-1] + .5)*resolution
+        if len(obstacle_points) and np.any(np.linalg.norm(obstacle_points-start_pose,axis=1) < radius):
+            return []
+
+    def clear_start_segment(nxt):
+        end = origin + (np.asarray(nxt)+.5)*resolution
+        delta = end-start_pose
+        length2 = float(delta @ delta)
+        fractions = np.clip((obstacle_points-start_pose) @ delta / max(length2,1e-20),0.,1.)
+        nearest = start_pose + fractions[:,None]*delta
+        return not np.any(np.linalg.norm(obstacle_points-nearest,axis=1) < radius)
+
     frontier, costs, parent = [(0.0, start)], {start: 0.0}, {}
     while frontier:
         _, current = heapq.heappop(frontier)
@@ -165,21 +189,63 @@ def plan_path(grid, origin, resolution, start, goal, radius=.65):
             while current in parent:
                 current = parent[current]
                 path.append(current)
-            return [(origin+(np.array(c)+.5)*resolution).tolist() for c in reversed(path)]
+            points = [(origin+(np.array(c)+.5)*resolution).tolist() for c in reversed(path)]
+            if recover_start:
+                points[0] = start_pose.tolist()
+            return points
         for dx, dy in ((1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)):
             nxt = (current[0]+dx, current[1]+dy)
             if not valid(nxt):
                 continue
             if dx and dy and (not valid((current[0]+dx, current[1])) or not valid((current[0], current[1]+dy))):
                 continue
-            cost = costs[current] + math.hypot(dx,dy) * (2.5 if grid[nxt[1],nxt[0]] < 0 else 1.0)
+            if recover_start and current == start and not clear_start_segment(nxt):
+                continue
+            step = math.dist(start_pose,origin+(np.asarray(nxt)+.5)*resolution)/resolution if recover_start and current == start else math.hypot(dx,dy)
+            cost = costs[current] + step * (2.5 if grid[nxt[1],nxt[0]] < 0 else 1.0)
             if cost < costs.get(nxt, float("inf")):
                 costs[nxt], parent[nxt] = cost, current
-                heapq.heappush(frontier, (cost+math.dist(nxt,goal), nxt))
+                heapq.heappush(frontier, (cost+(math.dist(nxt,goal) if algorithm == "astar" else 0.), nxt))
     return []
 
 
-def follow_path(pose, path, goal, scan, max_speed=.65, stop_distance=.55):
+def no_path_reason(grid, origin, resolution, pose, goal, radius):
+    """Explain a failed route without authorizing motion or weakening clearance."""
+    grid, origin = np.asarray(grid), np.asarray(origin)
+    obstacles = origin + (np.argwhere(grid >= 50)[:, ::-1]+.5)*resolution
+    for name, point in (("Robot", pose[:2]), ("Goal", goal)):
+        cell = np.floor((np.asarray(point)-origin)/resolution).astype(int)
+        if not (0 <= cell[0] < grid.shape[1] and 0 <= cell[1] < grid.shape[0]):
+            return f"{name} is outside the configured map."
+        if grid[cell[1],cell[0]] >= 50:
+            return f"{name} overlaps a mapped obstacle. Check localization and the selected goal."
+        if len(obstacles) and np.min(np.linalg.norm(obstacles-point,axis=1)) < radius:
+            if name == "Robot":
+                return "Robot is inside the configured obstacle clearance. Use manual control to move into clear space, then retry."
+            return "Goal is inside the configured obstacle clearance. Choose a goal farther from obstacles."
+    return "No connected route at the configured clearance. Check the map and choose another goal or retry after mapping updates."
+
+
+def fuzzy_command(error, clearance, max_speed, stop_distance):
+    """Zero-order Sugeno rules with overlapping triangular heading sets.
+
+    Five signed heading sets choose singleton turn rates; their symmetric speed
+    consequents are combined with near/clear memberships using product firing.
+    """
+    centers = np.array([-.65, -.35, 0., .35, .65])
+    heading = float(np.clip(error, -.65, .65))
+    weights = np.array([np.interp(heading, centers, np.eye(5)[i]) for i in range(5)])
+    clear = float(np.clip((clearance-stop_distance)/.8, 0., 1.))
+    # Near obstacles reduce forward speed, never command reverse motion.
+    speed_rules = np.array([0., .35, 1., .35, 0.])
+    linear = max_speed * float(weights @ speed_rules) * clear
+    angular = float(weights @ np.array([-1.3, -.84, 0., .84, 1.3]))
+    return linear, angular
+
+
+def follow_path(pose, path, goal, scan, max_speed=.65, stop_distance=.55, controller="proportional", map_state=None, radius=0.):
+    if controller not in ("proportional", "fuzzy"):
+        raise ValueError("Unknown controller: " + str(controller))
     if math.dist(pose[:2], goal) < .25:
         return 0.0, 0.0, "goal_reached"
     if not path:
@@ -187,12 +253,52 @@ def follow_path(pose, path, goal, scan, max_speed=.65, stop_distance=.55):
     points = np.asarray(path)
     nearest = int(np.argmin(np.linalg.norm(points-np.asarray(pose[:2]), axis=1)))
     target = points[min(nearest+4, len(points)-1)]
+    obstacles = None
+    if map_state is not None:
+        grid = np.asarray(map_state["grid"])
+        obstacles = np.asarray(map_state["origin"]) + (np.argwhere(grid >= 50)[:, ::-1]+.5)*map_state["resolution"]
+        # A lookahead across a bend may cut through the inflated obstacle even
+        # when every grid edge in the planned route is valid.
+        for index in range(min(nearest+4,len(points)-1), nearest, -1):
+            candidate = points[index]
+            delta = candidate-np.asarray(pose[:2])
+            fraction = np.clip((obstacles-pose[:2]) @ delta / max(float(delta @ delta),1e-20),0.,1.)
+            closest = np.asarray(pose[:2])+fraction[:,None]*delta
+            if not np.any(np.linalg.norm(obstacles-closest,axis=1) < radius):
+                target = candidate
+                break
+        else:
+            target = points[min(nearest+1,len(points)-1)]
     error = wrap(math.atan2(target[1]-pose[1], target[0]-pose[0])-pose[2])
     angular = float(np.clip(2.4*error, -1.3, 1.3))
     linear = max_speed * max(0, 1-abs(error)/.65)
     angles = np.asarray(scan["angles"]) + scan["offset"][2]
     angles = (angles+np.pi) % (2*np.pi)-np.pi
     front = np.abs(angles) < .45
-    if linear > 0 and np.any(front) and min(np.asarray(scan["ranges"])[front]) < stop_distance:
-        return 0.0, angular, "obstacle_stop"
+    clearance = float(min(np.asarray(scan["ranges"])[front])) if np.any(front) else float("inf")
+    forward_intent = linear > 0
+    if controller == "fuzzy":
+        linear, angular = fuzzy_command(error, clearance, max_speed, stop_distance)
+        forward_intent = abs(error) < .65
+    if forward_intent and clearance <= stop_distance:
+        return 0.0, 0.0, "obstacle_stop"
+    if obstacles is not None and linear > 0:
+        # Cover command transport and the next sensor interval. Slow down
+        # before a turn would carry the footprint into mapped clearance.
+        for scale in (1., .5, .25, 0.):
+            speed = linear*scale
+            times = np.linspace(0., .4, 5)[1:]
+            if abs(angular) < 1e-6:
+                predicted = np.asarray(pose[:2]) + speed*times[:,None]*np.array([math.cos(pose[2]),math.sin(pose[2])])
+            else:
+                headings = pose[2]+angular*times
+                predicted = np.asarray(pose[:2]) + speed/angular*np.column_stack([
+                    np.sin(headings)-math.sin(pose[2]), math.cos(pose[2])-np.cos(headings)])
+            if not np.any(np.linalg.norm(predicted[:,None,:]-obstacles[None,:,:],axis=2) < radius):
+                linear = speed
+                break
+        else:
+            linear = 0.
+        if linear == 0 and abs(angular) < .05:
+            return 0.,0.,"obstacle_stop"
     return linear, angular, "navigating"

@@ -152,7 +152,19 @@ class NavigationPath(Message):
     points: list[Vec2]
     goal: Vec2
     pose: Vec3 | None
-    status: Literal["navigating", "no_path", "goal_reached", "obstacle_stop", "paused", "sensor_timeout", "mission_complete"]
+    status: Literal["navigating", "no_path", "goal_reached", "obstacle_stop", "paused", "sensor_timeout", "mission_complete", "replanning", "stalled", "navigation_failed", "returning_home", "aligning_home", "home_reached", "cancelled"]
+    planner: Literal["astar", "dijkstra"] = "astar"
+    controller: Literal["proportional", "fuzzy"] = "proportional"
+    mission_id: str = ""
+    mission_type: Literal["goal", "waypoints", "exploration", "return_home"] = "goal"
+    mission_state: Literal["running", "paused", "recovering", "waiting_for_sensors", "completed", "failed", "cancelled"] = "running"
+    recovery_action: Literal["none", "start_new", "retry_or_cancel", "resume_or_cancel", "wait_for_sensors", "automatic_replan"] = "none"
+    home_pose: Vec3 | None = None
+    returning_home: bool = False
+    exploring: bool = False
+    exploration_targets: int = Field(default=0, ge=0)
+    reason: str | None = Field(default=None, max_length=500)
+    replans: int = Field(default=0, ge=0)
     waypoints: list[Vec2] = Field(default_factory=list)
     waypoint_index: int = Field(default=0, ge=0)
     distance_to_goal: float | None = Field(default=None, ge=0)

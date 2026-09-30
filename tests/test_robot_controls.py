@@ -1,4 +1,6 @@
 import sys
+import threading
+from dataclasses import replace
 import time
 import unittest
 from pathlib import Path
@@ -55,6 +57,52 @@ class ControlsTests(unittest.TestCase):
         with patch("plugins.user.command_selector.time.monotonic", return_value=time.monotonic()+.5):
             node._publish()
         self.assertEqual(node.emit.call_args.args[1]["linear"], 0)
+
+    def test_delayed_command_cannot_cross_mode_transition(self):
+        node=CommandSelector(node_id="drive",bus=self.bus,params={"mode":"manual"})
+        node.emit=Mock()
+        stamp=self.bus._clock.now()
+        old=BusMessage("test",{"linear":.65,"angular":0.,"time":1.,"frame":"base_link"},stamp,published_timestamp=stamp)
+        node.params['mode']='autonomous'
+        node.on_params_changed({'mode':'autonomous'})
+        # Queued before the switch, delivered after it: must not move the robot.
+        node.on_message('autonomous',old)
+        node._publish()
+        self.assertEqual(node.emit.call_args.args[1]['linear'],0.)
+        fresh=replace(old,timestamp=replace(stamp,epoch_ns=900_000_000_000),clock_domain="simulation",published_timestamp=self.bus._clock.now())
+        node.on_message('autonomous',fresh)
+        node._publish()
+        self.assertEqual(node.emit.call_args.args[1]['linear'],.65)
+        stopped=replace(fresh,payload={**fresh.payload,'linear':0.},published_timestamp=self.bus._clock.now())
+        node.on_message('autonomous',stopped)
+        node.on_message('autonomous',fresh)
+        node._publish()
+        self.assertEqual(node.emit.call_args.args[1]['linear'],0.)
+        expired=replace(fresh,published_timestamp=replace(self.bus._clock.now(),epoch_ns=self.bus._clock.now().epoch_ns-500_000_000))
+        node._commands.clear()
+        node.on_message('autonomous',expired)
+        node._publish()
+        self.assertEqual(node.emit.call_args.args[1]['linear'],0.)
+
+    def test_parameter_mutation_waits_for_control_cycle(self):
+        for cls,lock_name,key,value in ((AStarNavigation,'_control_lock','goal_x',2.),(CommandSelector,'_command_lock','mode','autonomous')):
+            node=cls(node_id='atomic',bus=self.bus)
+            previous=node.get_param(key)
+            entered=threading.Event()
+            done=threading.Event()
+            def update():
+                entered.set()
+                node.update_params({key:value})
+                done.set()
+            with getattr(node,lock_name):
+                worker=threading.Thread(target=update)
+                worker.start()
+                self.assertTrue(entered.wait(1))
+                self.assertFalse(done.wait(.05))
+                self.assertEqual(node.get_param(key),previous)
+            worker.join(1)
+            self.assertTrue(done.is_set())
+            self.assertEqual(node.get_param(key),value)
 
     def test_waypoint_order_completion_and_paused_progress(self):
         node = AStarNavigation(node_id="nav", bus=self.bus, params={"waypoints":[[0.,0.],[0.,.5]],"enabled":False})

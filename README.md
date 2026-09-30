@@ -57,7 +57,7 @@ Stop the graph before closing the terminals with Ctrl+C.
   Detailed STEP assemblies are simplified to fit the mesh budget.
 - Guided four-wheel robot setup, built-in simulation, Rerun visualization,
   Webots integration, keyboard control, local lidar SLAM and waypoint navigation.
-- Versioned project save/open. Version 3 embeds Model Builder meshes, normals
+- Versioned project save/open. Version 4 adds explicit map snapshots and starting-pose confirmation. Version 3 embeds Model Builder meshes, normals
   and display colors; versions 1 and 2 remain readable.
 - Authenticated deployment agent with compatibility checks, project transfer,
   remote start/stop, health and logs.
@@ -73,6 +73,8 @@ Stop the graph before closing the terminals with Ctrl+C.
 | Transfer a model into simulation | [Model to simulation](docs/MODEL_TO_SIMULATION.md) |
 | Configure wheels and sensors | [Robot setup](docs/GUIDED_ROBOT_SETUP.md) |
 | Drive and navigate a robot | [Controls and Webots](examples/four-wheel/CONTROLS_AND_WEBOTS.md) |
+| Save maps and initialize a new run | [Saved maps](docs/MAP_PERSISTENCE.md) |
+| Navigation recovery and autonomy milestones | [Autonomous navigation](docs/AUTONOMOUS_NAVIGATION.md) |
 | Try native Webots examples | [Webots examples](examples/webots/README.md) |
 | Connect to a deployment agent | [Deployment](docs/ROBOT_DEPLOYMENT.md) |
 | Assess hardware/production readiness | [Industrial readiness](docs/INDUSTRIAL_READINESS.md) |

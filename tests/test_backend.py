@@ -145,9 +145,9 @@ def test_live_param_update_changes_behavior():
         })
         client.post("/api/graph/start")
 
-        def count_messages_over(seconds: float) -> int:
+        def count_messages_over(seconds: float, preview=False) -> int:
             count = 0
-            with client.websocket_connect("/ws/bus") as ws:
+            with client.websocket_connect("/ws/bus?preview=true" if preview else "/ws/bus") as ws:
                 deadline = time.time() + seconds
                 while time.time() < deadline:
                     import json as _json
@@ -173,6 +173,8 @@ def test_live_param_update_changes_behavior():
         assert fast_count > slow_count * 3, (
             f"expected a real behavior change after live param update, got {slow_count} -> {fast_count}"
         )
+        preview_count = count_messages_over(.5, preview=True)
+        assert 1 <= preview_count <= 7, f"preview did not coalesce high-rate updates: {preview_count}"
 
         client.post("/api/graph/stop")
         client.delete("/api/graph/nodes/imu-rate-test")
