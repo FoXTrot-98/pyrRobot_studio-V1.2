@@ -10,6 +10,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
+import { WorldSetup } from "./components/WorldSetup";
 import { TopBar } from "./components/TopBar";
 import { Palette } from "./components/Palette";
 import { Inspector } from "./components/Inspector";
@@ -56,6 +57,8 @@ function StudioApp() {
   const [projectBusy, setProjectBusy] = useState(false);
   const [busyStartStop, setBusyStartStop] = useState(false);
   const [showSimulation, setShowSimulation] = useState(true);
+  const [showWorlds, setShowWorlds] = useState(false);
+  const [worldRevision, setWorldRevision] = useState(0);
   const [showExamples, setShowExamples] = useState(false);
   const [showDeployment, setShowDeployment] = useState(false);
   const [showPluginBuilder, setShowPluginBuilder] = useState(false);
@@ -180,6 +183,7 @@ function StudioApp() {
         onProjectName={setProjectName}
         onSaveProject={saveProject}
         onOpenProject={openProject}
+        onWorldSetup={() => setShowWorlds(true)}
         onRobotSetup={() => setSetup({name:projectName,positions:Object.fromEntries(graph.nodes.map(n=>[n.id,n.position]))})}
         onExamples={() => setShowExamples(true)}
         onDeploy={() => setShowDeployment(true)}
@@ -203,6 +207,7 @@ function StudioApp() {
           await graph.refreshFromBackend(info.positions);
         } finally { setProjectBusy(false); }
       }} />}
+      {showWorlds && <WorldSetup onClose={() => setShowWorlds(false)} onApplied={async () => {await graph.refreshFromBackend();setWorldRevision(v=>v+1);}}/>}
       {setup && <RobotSetupWizard projectName={setup.name} positions={setup.positions} initialModel={setup.initial} onClose={()=>setSetup(null)}
         onApplied={async info => {
           setProjectName(info.name); setRobot(info.robot); setSelectedNodeId(null); graph.dismissError();
@@ -260,8 +265,7 @@ function StudioApp() {
             </div>
           )}
         </div>
-        {navigationNode && showSimulation && <SimulationPanel
-          key={navigationNode.id}
+        {navigationNode && showSimulation && <SimulationPanel key={`${navigationNode.id}-${worldRevision}`}
           nodeId={navigationNode.id}
           params={navigationNode.data.params}
           running={graph.running}

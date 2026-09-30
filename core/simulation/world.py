@@ -133,7 +133,7 @@ class FourWheelSimulator:
         self.configuration = configuration or RobotConfiguration()
         self.obstacles = self.configuration.environment.boxes()
         self.radius, self.track = radius, track
-        self.pose = np.zeros(3)
+        self.pose = np.asarray(self.configuration.spawn_pose,dtype=float).copy()
         self.wheels = np.zeros(4)
         self.time = 0.0
         self.collisions = 0

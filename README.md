@@ -71,6 +71,8 @@ Stop the graph before closing the terminals with Ctrl+C.
 | Create plugins | [Plugin Builder](docs/PLUGIN_BUILDER.md) |
 | Import CAD and edit robot joints | [Model Builder](docs/ROBOT_MODEL_BUILDER.md) |
 | Transfer a model into simulation | [Model to simulation](docs/MODEL_TO_SIMULATION.md) |
+| Diagnose mesh/estimated pose and map alignment | [Mapping alignment](docs/MAPPING_ALIGNMENT.md) |
+| Select installed or external Webots worlds | [World setup](docs/SIMULATION_WORLDS.md) |
 | Configure wheels and sensors | [Robot setup](docs/GUIDED_ROBOT_SETUP.md) |
 | Drive and navigate a robot | [Controls and Webots](examples/four-wheel/CONTROLS_AND_WEBOTS.md) |
 | Save maps and initialize a new run | [Saved maps](docs/MAP_PERSISTENCE.md) |

@@ -24,6 +24,17 @@ def main():
                 page=browser.new_page(viewport={'width':1500,'height':1000})
                 errors=[]; page.on('pageerror',lambda e:errors.append(str(e)))
                 page.goto('http://127.0.0.1:5186')
+                if os.environ.get('PYROBOT_TEST_WORLD'):
+                    page.get_by_role('button',name='World setup',exact=True).click()
+                    world=page.get_by_role('dialog',name='World setup',exact=True)
+                    world.get_by_label('External world path').fill(str(ROOT/'tests/fixtures/external-room.wbt'))
+                    world.get_by_role('button',name='Check world',exact=True).click()
+                    world.get_by_text('Compatible world structure',exact=True).wait_for()
+                    world.get_by_role('checkbox').check()
+                    world.get_by_role('button',name='Apply world',exact=True).click()
+                    world.get_by_role('status').wait_for()
+                    page.screenshot(path=str(artifacts/'world-setup.png'))
+                    world.get_by_role('button',name='Close world setup').click()
                 page.get_by_role('button',name='Robot setup',exact=True).click()
                 dialog=page.get_by_role('dialog',name='Set up your robot')
                 dialog.get_by_role('button',name='Use sample robot').click()
@@ -41,6 +52,8 @@ def main():
                 dialog.get_by_label('Left rear wheel').select_option('rear_left_wheel_joint')
                 dialog.get_by_role('button',name='Next',exact=True).click()
                 dialog.get_by_role('button',name='Next',exact=True).click()
+                if os.environ.get('PYROBOT_TEST_WORLD'):
+                    assert dialog.get_by_label('Project setup',exact=True).input_value()=='webots'
                 dialog.get_by_label('Project name',exact=True).fill('Wizard robot')
                 dialog.get_by_role('button',name='Check setup').click()
                 dialog.get_by_text('Setup checked',exact=True).wait_for()
@@ -50,6 +63,13 @@ def main():
                 graph=page.request.get('http://127.0.0.1:8022/api/graph').json()
                 assert len(graph['nodes'])==7 and not graph['running']
                 assert page.get_by_label('Project name',exact=True).input_value()=='Wizard robot'
+                if os.environ.get('PYROBOT_TEST_WORLD'):
+                    assert any(n['plugin_id']=='pyrobot.sim.webots' for n in graph['nodes'])
+                    assert page.request.get('http://127.0.0.1:8022/api/project').json()['robot_config']['webots_world'].endswith('external-room.wbt')
+                    assert not errors,errors
+                    print('PASS: world-first top bar selection, robot setup preserves world and creates Webots graph',flush=True)
+                    browser.close()
+                    return
                 # Cancelling a draft does not change the existing robot config.
                 before=page.request.get('http://127.0.0.1:8022/api/project').json()
                 page.get_by_role('button',name='Robot setup',exact=True).click()

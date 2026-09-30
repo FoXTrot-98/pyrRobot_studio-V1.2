@@ -17,7 +17,7 @@ from core.simulation.webots_project import generate_project, find_webots, ROOT
 
 class WebotsSimulation(Node):
     manifest = PluginManifest(id="pyrobot.sim.webots", name="Webots four-wheel robot", category="Simulation",
-        description="Launches a Webots physics world from the project URDF/configuration. Real simulated lidar, camera and motor encoders.",
+        description="Launches a Webots physics world from the project URDF/configuration. Simulated lidar, camera, motor encoders and an integrated base gyro.",
         inputs=[PortSpec("cmd_vel", T.JSON, schema="pyrobot/VelocityCommand@1")],
         outputs=[PortSpec("sensors", T.JSON, schema="pyrobot/SensorPacket@1"), PortSpec("truth", T.JSON),
                  PortSpec("camera", T.IMAGE, schema="pyrobot/Image@1")],
@@ -38,7 +38,13 @@ class WebotsSimulation(Node):
             raise ValueError("Bind Webots to the configured base frame")
         if not find_webots(self.get_param("executable", "")):
             raise ValueError("Webots not found. Install Webots R2025a or set the executable parameter / WEBOTS_EXECUTABLE.")
-        if collision(np.zeros(3), self.robot_config.drive.collision_radius, self.robot_config.environment.boxes()):
+        if self.robot_config.webots_world:
+            from core.simulation.external_world import inspect
+            info=inspect(self.robot_config.webots_world,self.get_param('executable',''))
+            if info['sha256']!=self.robot_config.webots_world_hash:
+                raise ValueError('Source world changed. Check and apply it again in World setup')
+            return
+        if collision(np.asarray(self.robot_config.spawn_pose), self.robot_config.drive.collision_radius, self.robot_config.environment.boxes()):
             raise ValueError("Starting position collides with the configured environment")
 
     def on_start(self):
@@ -51,7 +57,7 @@ class WebotsSimulation(Node):
         self._server.settimeout(.2)
         token = uuid.uuid4().hex
         self.directory = ROOT/"artifacts/webots"/token
-        world = generate_project(self.directory, self.robot_model, self.robot_config, self._server.getsockname()[1], token)
+        world = generate_project(self.directory, self.robot_model, self.robot_config, self._server.getsockname()[1], token, self.get_param('executable',''))
         self._log_file = (self.directory/"webots.log").open("w", encoding="utf-8")
         command = [find_webots(self.get_param("executable", "")), "--batch", "--mode=realtime", "--stdout", "--stderr"]
         if self.get_param("minimize", False): command.append("--minimize")
@@ -90,6 +96,8 @@ class WebotsSimulation(Node):
                 if not raw or not raw.endswith(b"\n"):
                     raise RuntimeError("Webots controller disconnected or packet exceeded limit")
                 packet = json.loads(raw)
+                if packet.get('error'):
+                    raise RuntimeError(packet['error'])
                 now = packet["time"]
                 if now <= last_time:
                     raise ValueError("Webots simulation clock reset; stop and restart the Studio graph")
@@ -102,11 +110,13 @@ class WebotsSimulation(Node):
                 metadata = dict(timestamp=captured, clock_domain="simulation")
                 ticks = np.rint(np.asarray(packet["wheels"])*drive.ticks_per_turn/(2*np.pi)).astype(int).tolist()
                 self.emit("sensors", {"ticks": ticks, "wheel_radius": self.radius, "track": self.track,
-                    "ticks_per_turn": drive.ticks_per_turn, "scan": packet["scan"], "time": now, "frame": drive.base_frame}, **metadata)
+                    "ticks_per_turn": drive.ticks_per_turn, "scan": packet["scan"], "gyro_yaw": packet.get("gyro_yaw"), "time": now, "frame": drive.base_frame}, **metadata)
+                mapping=self.robot_config.mapping
+                bounds=[*mapping.origin,mapping.origin[0]+mapping.width*mapping.resolution,mapping.origin[1]+mapping.height*mapping.resolution] if self.robot_config.webots_world else self.robot_config.environment.bounds
                 self.emit("truth", {"pose": packet["pose"], "wheels": packet["wheels"], "time": now,
                     "source": "webots",
-                    "joint_names": drive.left_joints+drive.right_joints, "bounds": self.robot_config.environment.bounds,
-                    "obstacles": self.robot_config.environment.boxes(), "collisions": packet["collisions"], "blocked": packet["blocked"]}, **metadata)
+                    "joint_names": drive.left_joints+drive.right_joints, "bounds": bounds,
+                    "obstacles": [] if self.robot_config.webots_world else self.robot_config.environment.boxes(), "collisions": packet["collisions"], "blocked": packet["blocked"]}, **metadata)
                 if "camera_bgra" in packet:
                     pixels = np.frombuffer(base64.b64decode(packet["camera_bgra"], validate=True), dtype=np.uint8).reshape(144,240,4)
                     ok, encoded = cv2.imencode(".jpg", cv2.cvtColor(pixels, cv2.COLOR_BGRA2BGR))

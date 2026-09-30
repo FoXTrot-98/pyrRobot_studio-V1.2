@@ -151,7 +151,7 @@ def draft_project(runtime, request):
         document.name, document.robot_urdf, document.robot_config = request.name, request.robot_urdf, request.robot_config
         for node in document.nodes:
             node.plugin_version = runtime.registry.get(node.plugin_id).manifest.version
-            if node.plugin_id == 'pyrobot.navigation.astar': node.params.update(goal_x=0., goal_y=0., enabled=False, waypoints=[])
+            if node.plugin_id == 'pyrobot.navigation.astar': node.params.update(goal_x=request.robot_config.spawn_pose[0], goal_y=request.robot_config.spawn_pose[1], enabled=False, waypoints=[])
     document.robot_assets = request.robot_assets
     document.schema_version = 3 if request.robot_assets else 2
     for node in document.nodes:

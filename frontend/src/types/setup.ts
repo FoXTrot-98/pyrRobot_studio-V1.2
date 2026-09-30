@@ -4,6 +4,10 @@ export interface RobotPackage {
   robot_assets: Record<string,{vertices:Vector3[];faces:number[][];normals:Vector3[];colors:Vector3[]}>;
 }
 export interface RobotConfiguration {
+  webots_world?: string;
+  webots_world_hash?: string;
+  spawn_pose?: number[];
+  spawn_height?: number;
   drive: {
     type: "four_wheel_differential";
     base_frame: string;

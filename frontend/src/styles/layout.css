@@ -167,3 +167,25 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .goal-fields label { flex: 1; min-width: 60px; }
 .goal-fields input { width: 100%; }
 .goal-fields button { margin-bottom: 10px; }
+
+.world-dialog { width:min(780px,90vw); max-height:88vh; overflow:auto; border:1px solid #adb8c5; border-radius:12px; padding:24px; background:#f5f7fa; color:#243246; }
+.world-dialog::backdrop { background:#10203388; }
+.world-dialog header { display:flex; justify-content:space-between; gap:20px; }
+.world-dialog fieldset { border:0; padding:0; margin:16px 0; }
+.world-dialog label { display:flex; flex-direction:column; gap:6px; margin:12px 0; }
+.world-dialog input,.world-dialog select { padding:9px; min-width:0; width:100%; box-sizing:border-box; }
+.world-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.world-dialog .world-reset { flex-direction:row; align-items:center; }
+.world-reset input { width:auto; }
+.world-dialog button { padding:9px 16px; cursor:pointer; }
+.world-result { padding:12px; border:1px solid #8faabe; margin-top:12px; }
+.world-dialog [role=alert] { color:#a32121; }
+
+.world-dialog header { position:sticky; top:-24px; z-index:1; background:#f5f7fa; padding:12px 0; border-bottom:1px solid #d0d8e1; }
+.world-dialog h2 { margin:0; }
+.world-dialog header button { align-self:flex-start; }
+.world-dialog summary { padding:12px 0; cursor:pointer; font-weight:600; }
+.world-dialog input,.world-dialog select,.world-dialog button { border:1px solid #a8b5c5; border-radius:6px; }
+.world-dialog button:enabled { color:#fff; background:#285a88; }
+.world-dialog button:disabled { cursor:default; opacity:.55; }
+@media(max-width:600px) { .world-fields { grid-template-columns:1fr; } }

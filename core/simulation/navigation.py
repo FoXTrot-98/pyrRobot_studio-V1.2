@@ -16,12 +16,13 @@ class WheelOdometry:
         self.pose = np.zeros(3)
         self.previous = np.zeros(4)
 
-    def update(self, ticks, radius, track, ticks_per_turn=4096):
+    def update(self, ticks, radius, track, ticks_per_turn=4096, gyro_yaw=None):
         angles = np.asarray(ticks) * (2*math.pi/ticks_per_turn)
         delta = (angles - self.previous) * radius
         self.previous = angles
         left, right = np.mean(delta[:2]), np.mean(delta[2:])
-        self.pose = advance(self.pose, (left+right)/2, (right-left)/track)
+        rotation = (right-left)/track if gyro_yaw is None else wrap(gyro_yaw-self.pose[2])
+        self.pose = advance(self.pose, (left+right)/2, rotation)
         return self.pose.copy()
 
 
@@ -33,6 +34,8 @@ class LidarSlam:
         self.frames = 0
         self.submaps = []
         self.keyframe_poses = []
+        self._reference_key = None
+        self._gyro_heading_offset = None
 
     def cells(self, points):
         return np.floor((np.asarray(points)-self.origin)/self.resolution).astype(int)
@@ -43,30 +46,66 @@ class LidarSlam:
         points = mount[:2] + np.asarray(scan["ranges"])[:, None] * np.stack([np.cos(angles), np.sin(angles)], axis=1)
         return mount, points
 
-    def update(self, odometry, scan):
+    def update(self, odometry, scan, gyro_yaw=None):
         odometry = np.asarray(odometry)
         delta = odometry[:2] - self.last_odom[:2]
         correction = self.pose[2] - self.last_odom[2]
         c, s = math.cos(correction), math.sin(correction)
         predicted = self.pose + [c*delta[0]-s*delta[1], s*delta[0]+c*delta[1], wrap(odometry[2]-self.last_odom[2])]
         predicted[2] = wrap(predicted[2])
+        if gyro_yaw is not None:
+            if self._gyro_heading_offset is None:
+                self._gyro_heading_offset = self.pose[2]-self.last_odom[2]
+            predicted[2] = wrap(self._gyro_heading_offset+gyro_yaw)
         best = predicted.copy()
         if self.submaps and any(len(entry[0]) for entry in self.submaps):
             # Reuse spatial anchors when revisiting a place. Replacing all
             # references every two seconds integrated scan noise into map drift.
             distances = [np.linalg.norm(p[:2]-predicted[:2]) for p in self.keyframe_poses]
             nearby = sorted(range(len(distances)), key=lambda i: (distances[i], i))[:8]
-            reference = np.concatenate([self.submaps[i][0] for i in nearby])
-            normals = np.concatenate([self.submaps[i][1] for i in nearby])
+            key = tuple(id(self.submaps[i]) for i in nearby)
+            if key != self._reference_key:
+                self._reference_entries = tuple(self.submaps[i] for i in nearby)
+                self._reference = np.concatenate([self.submaps[i][0] for i in nearby])
+                self._normals = np.concatenate([self.submaps[i][1] for i in nearby])
+                # Exact 2-D KD-tree queries avoid allocating the full
+                # scan-points x submap-points distance matrix every iteration.
+                self._reference_origin = self._reference.mean(axis=0)
+                self._reference_index = cv2.flann_Index((self._reference-self._reference_origin).astype(np.float32), dict(algorithm=1, trees=1))
+                self._reference_key = key
+            reference, normals = self._reference, self._normals
             valid = np.asarray(scan["hits"], dtype=bool)
+            turn = abs(wrap(odometry[2]-self.last_odom[2]))
+            if gyro_yaw is None and turn > .2 and np.count_nonzero(valid) >= 60:
+                # Latest-message workers intentionally skip scans under load.
+                # Skid-steer encoders can then overpredict heading by more
+                # than local ICP's capture range. Seed it with a bounded scan
+                # rotation search, using only measured surfaces, never truth.
+                bound = min(1.6, turn+.1)
+                headings = predicted[2] + np.linspace(-bound, bound, math.ceil(2*bound/.04)+1)
+                headings = np.append(headings, predicted[2])
+                _, local = self.endpoints(np.zeros(3), scan)
+                local = local[valid][::3]
+                cosine, sine = np.cos(headings), np.sin(headings)
+                points = np.stack([cosine[:,None]*local[:,0]-sine[:,None]*local[:,1],
+                                   sine[:,None]*local[:,0]+cosine[:,None]*local[:,1]], axis=-1) + predicted[:2]
+                _, distances = self._reference_index.knnSearch((points.reshape(-1,2)-self._reference_origin).astype(np.float32), 1, params={"checks": -1})
+                distances = distances.reshape(len(headings),len(local))
+                costs = np.mean(np.minimum(distances,.4**2),axis=1)
+                winner = int(np.argmin(costs))
+                if costs[winner] < .7*costs[-1] and np.mean(distances[winner] < .4**2) > .5:
+                    best[2] = headings[winner]
             # Local point-to-plane ICP against recent scan keyframes. Odometry
             # seeds the estimate; least-squares surface residuals correct drift.
-            for _ in range(7):
+            iterations = max(7, min(40, math.ceil(turn/.03)+3))
+            for _ in range(iterations):
                 _, points = self.endpoints(best, scan)
                 points = points[valid][::3]
-                squared = np.sum((points[:, None, :] - reference[None, :, :])**2, axis=2)
-                nearest = np.argmin(squared, axis=1)
-                keep = squared[np.arange(len(points)), nearest] < .4**2
+                if not len(points):
+                    break
+                nearest, squared = self._reference_index.knnSearch((points-self._reference_origin).astype(np.float32), 1, params={"checks": -1})
+                nearest, squared = nearest[:, 0], squared[:, 0]
+                keep = squared < .4**2
                 if np.count_nonzero(keep) < 20:
                     break
                 points, targets, n = points[keep], reference[nearest[keep]], normals[nearest[keep]]
@@ -74,11 +113,37 @@ class LidarSlam:
                 residual = np.sum(n*(points-targets), axis=1)
                 keep = np.abs(residual) < .15
                 jacobian = np.column_stack([n[:,0], n[:,1], -n[:,0]*relative[:,1]+n[:,1]*relative[:,0]])[keep]
+                if gyro_yaw is not None:
+                    # Circular/repetitive scenes cannot reliably distinguish
+                    # heading from translation. Use integrated angular-rate
+                    # measurements for heading and match translation only.
+                    # This is relative gyro dead reckoning, not global truth;
+                    # a real gyro's accumulated bias still requires calibration.
+                    jacobian[:,2] = 0.
                 if len(jacobian) < 20:
                     break
-                # Small odometry regularizer resolves underconstrained corridors.
-                lhs = jacobian.T @ jacobian + np.diag([.2, .2, .3])
-                update = np.linalg.solve(lhs, -jacobian.T @ residual[keep])
+                # A wall constrains distance and heading, but not translation
+                # along it. Noisy normals must not manufacture that missing
+                # information. Scale rotation to metres before testing rank;
+                # otherwise long-range returns dominate the condition number.
+                lever = max(1., float(np.sqrt(np.mean(jacobian[:, 2]**2))))
+                scale = np.array([1., 1., lever])
+                scaled = jacobian / scale
+                hessian = scaled.T @ scaled
+                eigenvalues, axes = np.linalg.eigh(hessian)
+                observable = eigenvalues > max(1., .02*eigenvalues[-1])
+                basis = axes[:, observable]
+                if not basis.shape[1]:
+                    break
+                # Anchor the TOTAL correction to encoder prediction. Damping
+                # each iteration alone allowed seven small biased corrections
+                # per scan to accumulate into metres of fictitious motion.
+                correction = (best-predicted)*scale
+                correction[2] = wrap(best[2]-predicted[2])*lever
+                gradient = scaled.T @ residual[keep] + .2*correction
+                step = -basis @ ((basis.T @ gradient)/(eigenvalues[observable]+.2))
+                total = basis @ (basis.T @ (correction+step))
+                update = total/scale - (best-predicted)
                 update = np.clip(update, [-.06,-.06,-.03], [.06,.06,.03])
                 best += update
                 if np.linalg.norm(update) < 1e-4:
@@ -133,7 +198,7 @@ class LidarSlam:
         occupancy[self.grid > .7] = 100
         return {"pose": self.pose.tolist(), "grid": occupancy.tolist(), "resolution": self.resolution,
                 "origin": self.origin.tolist(), "scan": scan, "time": sim_time,
-                "mapped_cells": int(np.count_nonzero(occupancy >= 0)), "algorithm": "encoder + local point-to-plane scan-to-submap ICP"}
+                "mapped_cells": int(np.count_nonzero(occupancy >= 0)), "algorithm": ("encoder + integrated gyro + translation scan matching" if self._gyro_heading_offset is not None else "encoder + local point-to-plane scan-to-submap ICP")}
 
 
 def plan_path(grid, origin, resolution, start, goal, radius=.65, algorithm="astar", known_only=False):

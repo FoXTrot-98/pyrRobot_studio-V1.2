@@ -24,6 +24,10 @@ from core.runtime.project import ProjectDocument
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', type=Path)
+    parser.add_argument('--world', type=Path)
+    parser.add_argument('--spawn', type=float, nargs=3, default=[0.,0.,0.])
+    parser.add_argument('--explore-seconds', type=float, default=0)
+    parser.add_argument('--sensor-only', action='store_true')
     parser.add_argument('--mesh', action='store_true')
     parser.add_argument('--return-home', action='store_true')
     parser.add_argument('--planner', choices=['astar','dijkstra'], default='astar')
@@ -38,6 +42,16 @@ def main():
         package=builder_package(Model.model_validate_json((ROOT/'examples/model-builder/four-wheel-rover.robot-builder.json').read_text()))
         doc=ProjectDocument.model_validate({**doc.model_dump(),**package,'schema_version':3})
         doc.robot_config.drive.wheel_radius=.12
+    if args.world:
+        from core.simulation.external_world import inspect
+        info=inspect(args.world)
+        doc.robot_config.webots_world=info['path']
+        doc.robot_config.webots_world_hash=info['sha256']
+        doc.robot_config.spawn_pose=args.spawn
+        doc.robot_config.mapping.origin=[-15,-15]
+        doc.robot_config.mapping.width=200
+        doc.robot_config.mapping.height=200
+        doc.robot_config.mapping.resolution=.15
     for node in doc.nodes:
         if node.node_id == "sim": node.params["minimize"] = True
         if node.node_id == "nav":
@@ -62,7 +76,38 @@ def main():
         truth = received["node/sim/out/truth"]
         scan = received["node/sim/out/sensors"]["scan"]
         print("Initial pose:", truth["pose"], "lidar rear/front:", scan["ranges"][0], scan["ranges"][180], flush=True)
-        assert abs(scan["ranges"][180]-1.95)<.2, "Lidar forward axis is incorrect"
+        if args.world:
+            assert truth['obstacles']==[]
+            assert any(scan['hits']), 'External geometry was not sensed'
+            pose=received['node/slam/out/state']['pose']
+            assert math.dist(pose[:2],args.spawn[:2])<.2, pose
+            if args.sensor_only:
+                runtime.graph.stop();handle.close()
+                assert simulator._process.poll() is not None
+                print('PASS external world sensor data, spawn frame and process cleanup',flush=True)
+                return
+        else:
+            assert abs(scan["ranges"][180]-1.95)<.2, "Lidar forward axis is incorrect"
+        if args.explore_seconds:
+            start=truth['pose'][:]
+            runtime.graph.update_node_params('nav',{'explore':True,'enabled':True})
+            runtime.graph.update_node_params('drive',{'mode':'autonomous'})
+            deadline=time.monotonic()+args.explore_seconds
+            wait(lambda: time.monotonic()>=deadline,args.explore_seconds+5)
+            truth=received['node/sim/out/truth']
+            assert math.dist(start[:2],truth['pose'][:2])>.3, 'Exploration did not move'
+            assert truth['collisions']==0
+            print('Exploration pose:',truth['pose'],'status:',received['node/nav/out/path']['status'],flush=True)
+            home=received['node/nav/out/path']['home_pose']
+            runtime.graph.update_node_params('nav',{'explore':False,'return_home':True,'enabled':True})
+            wait(lambda: received.get('node/nav/out/path',{}).get('status')=='home_reached',90)
+            truth=received['node/sim/out/truth']
+            assert math.dist(truth['pose'][:2],home[:2])<.4, truth
+            assert truth['collisions']==0
+            runtime.graph.stop();handle.close()
+            assert simulator._process.poll() is not None
+            print('PASS imported-world exploration and return home:',truth['pose'],flush=True)
+            return
         keyboard = runtime.graph.nodes["keyboard"].node_obj
         runtime.graph.update_node_params("drive", {"mode":"manual"})
         keyboard.acquire("smoke")

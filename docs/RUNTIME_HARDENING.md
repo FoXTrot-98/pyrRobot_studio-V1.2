@@ -20,7 +20,7 @@ those plugins adopt schemas; this is an explicit compatibility boundary.
 `core/messages.py` defines LaserScan, Odometry, Image, JointState,
 VelocityCommand and OccupancyGrid, plus SensorPacket, Observation, MappingState
 and NavigationPath for the reference pipeline. The latter composite messages
-keep synchronized lidar/encoder observations together. Odometry and velocity
+keep synchronized lidar/encoder observations together. SensorPacket and Observation also accept optional `gyro_yaw`: a finite base-Z gyro angle integrated in radians since the current run began. It is not a global/world heading; old packets without it retain encoder-only prediction. Generated Webots robots supply this from a virtual angular-rate sensor. Odometry and velocity
 contracts currently describe planar motion; they are not general 6-DoF messages.
 
 Publication and receipt validate structure, schema version, finite values,

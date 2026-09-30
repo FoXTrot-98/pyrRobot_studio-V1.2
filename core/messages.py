@@ -125,6 +125,7 @@ class SensorPacket(Message):
     wheel_radius: float = Field(gt=0)
     track: float = Field(gt=0)
     ticks_per_turn: int = Field(gt=0)
+    gyro_yaw: float | None = Field(default=None, description="Integrated base-Z gyro angle in radians since run start; not a world heading")
     scan: LaserScan
     time: float = Field(ge=0)
 
@@ -134,6 +135,7 @@ class Observation(Message):
     length_unit: Literal["m"] = "m"
     angle_unit: Literal["rad"] = "rad"
     odometry: Vec3
+    gyro_yaw: float | None = None
     scan: LaserScan
     time: float = Field(ge=0)
 

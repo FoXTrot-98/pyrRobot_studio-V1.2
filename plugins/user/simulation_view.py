@@ -9,9 +9,9 @@ import rerun.blueprint as rrb
 
 from sdk.pyrobot_plugin import PluginManifest, PortSpec, PortDataType as T
 from core.simulation.worker import WorkerNode
-from core.simulation.world import sensor_pose
+from core.simulation.world import sensor_pose, wrap
 from core.urdf.model import origin_matrix
-from core.simulation.mesh_robot import mesh_data
+from core.simulation.mesh_robot import mesh_data, collision_body
 
 
 def cylinder_mesh(radius, length):
@@ -52,6 +52,7 @@ class SimulationRerunView(WorkerNode):
         self._base_inverse = np.linalg.inv(base)
         self._lidar_height = self.robot_model.static_transform(self.robot_config.drive.base_frame,
             self.robot_config.drive.lidar_frame)["xyz"][2]
+        self._body_center, self._body_size = collision_body(self.robot_model, self.robot_config)
         rr.log("simulation", rr.Clear(recursive=True))
         rr.log("simulation", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
         rr.send_blueprint(rrb.Blueprint(rrb.Horizontal(
@@ -138,8 +139,10 @@ class SimulationRerunView(WorkerNode):
         elif port == "state":
             self.estimate = payload
             pose = payload["pose"]
-            rr.log("simulation/estimated_pose", rr.Boxes3D(centers=[[pose[0],pose[1],.3]],sizes=[[.82,.62,.28]],
-                rotation_axis_angles=[rr.RotationAxisAngle([0,0,1], radians=pose[2])],colors=[255,209,75],fill_mode=rr.components.FillMode.MajorWireframe))
+            center = sensor_pose(pose, [*self._body_center[:2], 0.])
+            rr.log("simulation/estimated_pose", rr.Boxes3D(centers=[[center[0],center[1],self._body_center[2]]],sizes=[self._body_size],
+                rotation_axis_angles=[rr.RotationAxisAngle([0,0,1], radians=pose[2])],colors=[255,209,75],
+                labels=["SLAM estimate"],fill_mode=rr.components.FillMode.MajorWireframe))
             if not self.trajectory or math.dist(pose[:2], self.trajectory[-1][:2]) >= .04:
                 self.trajectory.append([pose[0],pose[1],.06])
                 self.trajectory = self.trajectory[-1000:]
@@ -149,7 +152,10 @@ class SimulationRerunView(WorkerNode):
             angles = np.asarray(scan["angles"])+mount[2]
             points = mount[:2]+np.asarray(scan["ranges"])[:,None]*np.column_stack([np.cos(angles),np.sin(angles)])
             lidar_height = self._lidar_height
-            rr.log("simulation/lidar_hits",rr.Points3D(np.column_stack([points,np.full(len(points),lidar_height)]),colors=[60,230,190],radii=.025))
+            # Max-range/no-return beams describe free space, not measured
+            # surfaces. Drawing them as hits produced a moving false ring.
+            hits = points[np.asarray(scan["hits"], dtype=bool)]
+            rr.log("simulation/lidar_hits",rr.Points3D(np.column_stack([hits,np.full(len(hits),lidar_height)]),colors=[60,230,190],radii=.025))
             rays = [[[mount[0],mount[1],lidar_height],[p[0],p[1],lidar_height]] for p in points[::8]]
             rr.log("simulation/lidar_rays",rr.LineStrips3D(rays,colors=[45,170,165,65],radii=.004))
             self._frames += 1
@@ -162,15 +168,16 @@ class SimulationRerunView(WorkerNode):
             rr.log("simulation/goal",rr.Points3D([[*payload["goal"],.15]],colors=[245,87,104],radii=.15,labels=["Goal"]))
         if self.route and port == "path":
             error = math.dist(self.truth["pose"][:2],self.estimate["pose"][:2]) if self.truth and self.estimate else 0
+            heading_error = math.degrees(abs(wrap(self.truth["pose"][2]-self.estimate["pose"][2]))) if self.truth and self.estimate else 0
             distance = self.route.get("distance_to_goal")
             distance_text = f"{distance:.2f} m" if distance is not None else "Awaiting sensors"
             simulator = "Webots physics simulation" if self.truth and self.truth.get("source") == "webots" else "Built-in planar simulation"
             rr.log("navigation/status",rr.TextDocument(
                 f"# {self.route['status'].replace('_',' ').title()}\n\n"
                 f"Goal: {self.route['goal']} m\n\nDistance: {distance_text}\n\n"
-                f"Pose error vs simulator: {error:.3f} m\n\n"
+                f"Latest pose difference vs simulator: {error:.3f} m / {heading_error:.1f} degrees\n\n"
                 f"Collision contacts: {self.truth['collisions'] if self.truth else 0}\n\n"
-                "Blue: A* path · Yellow: estimated pose/map trail · Green: lidar\n\n"
+                "3D model: simulated physical robot. Yellow: SLAM estimate / map trail. Blue: planned path. Green: measured lidar hits.\n\n"
                 f"{simulator}. Local lidar SLAM; no loop closure. Camera is visualization only.", media_type="text/markdown"))
 
     def _map(self, payload):

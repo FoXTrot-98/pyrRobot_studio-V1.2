@@ -45,7 +45,13 @@ export interface MapInfo {
   can_capture: boolean;
 }
 
+export interface WorldChoice { path:string; revision:string; spawn_pose:number[]; spawn_height:number; bounds:number[]; resolution:number; reset_mission:boolean; source_hash?:string }
+export interface WorldPreview { path:string; sha256:string; removed_robots:string[]; warnings:string[] }
+export interface WorldCatalog { worlds:{path:string;name:string}[]; error:string|null; revision:string; configuration:import('../types/setup').RobotConfiguration; bounds:number[]; empty:boolean }
 export const api = {
+  simulationWorlds: () => request<WorldCatalog>('/api/simulation/worlds'),
+  previewWorld: (choice:WorldChoice) => request<WorldPreview>('/api/simulation/worlds/preview',{method:'POST',body:JSON.stringify(choice)}),
+  applyWorld: (choice:WorldChoice) => request<unknown>('/api/simulation/worlds/apply',{method:'POST',body:JSON.stringify(choice)}),
   getMap: (nodeId: string) => request<MapInfo>(`/api/project/maps/${encodeURIComponent(nodeId)}`),
   captureMap: (nodeId: string, name: string) => request<MapInfo>(`/api/project/maps/${encodeURIComponent(nodeId)}`, {method:"POST",body:JSON.stringify({name})}),
   initializeMap: (nodeId: string, pose: number[]) => request<MapInfo>(`/api/project/maps/${encodeURIComponent(nodeId)}/initialize`, {method:"POST",body:JSON.stringify({pose})}),

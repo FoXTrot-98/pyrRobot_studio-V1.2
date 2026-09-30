@@ -26,6 +26,9 @@ def main():
     for encoder in encoders:
         encoder.enable(20)
     lidar, camera = robot.getDevice("lidar"), robot.getDevice("camera")
+    gyro = robot.getDevice("imu_gyro")
+    gyro.enable(20)
+    gyro_yaw, gyro_time = 0., robot.getTime()
     lidar.enable(100)
     camera.enable(200)
     connection = socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=5)
@@ -37,6 +40,15 @@ def main():
     try:
         while robot.step(20) != -1:
             count += 1
+            # Integrate a simulated physical angular-rate sensor at the physics
+            # rate, before downsampling packets. Never derive odometry heading
+            # from Supervisor.getOrientation()/ground truth below.
+            sensor_time = robot.getTime()
+            yaw_rate = gyro.getValues()[2]
+            if not math.isfinite(yaw_rate):
+                raise RuntimeError("Invalid gyro angular-rate sample")
+            gyro_yaw += yaw_rate*(sensor_time-gyro_time)
+            gyro_time = sensor_time
             if time.monotonic()-last_command > .6:
                 for motor in motors: motor.setVelocity(0.)
             if count % 5:
@@ -49,11 +61,15 @@ def main():
             wheels = [encoder.getValue() for encoder in encoders]
             position, orientation = robot.getSelf().getPosition(), robot.getSelf().getOrientation()
             pose = [position[0], position[1], math.atan2(orientation[3], orientation[0])]
-            blocked = any(point.point[2] > .04 for point in robot.getSelf().getContactPoints(True))
+            contacts=robot.getSelf().getContactPoints(True)
+            blocked = any(point.point[2] > position[2]+.04 for point in contacts)
+            if config.get('webots_world') and (blocked or orientation[8]<.85 or abs(position[2]-config.get('spawn_height',.002))>.3) and count<=25:
+                stream.write((json.dumps({'error':'Unsafe spawn: body contact, tipping or unsupported floor height. Stop and adjust World setup spawn X/Y/height.'})+'\n').encode());stream.flush()
+                break
             collisions += int(blocked)
             scan = {"ranges": ranges, "angles": angles, "hits": hits, "range_max": 9.,
                 "offset": info["mounts"]["lidar_link"], "frame": config["drive"]["lidar_frame"]}
-            packet = {"time": sim_time, "pose": pose, "wheels": wheels,
+            packet = {"time": sim_time, "pose": pose, "wheels": wheels, "gyro_yaw": gyro_yaw,
                 "scan": scan, "collisions": collisions, "blocked": blocked}
             if count % 10 == 0:
                 packet["camera_bgra"] = base64.b64encode(camera.getImage()).decode()

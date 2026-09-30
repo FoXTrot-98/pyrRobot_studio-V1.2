@@ -55,6 +55,10 @@ class MapSettings(Settings):
 
 
 class RobotConfiguration(Settings):
+    webots_world: str = ""
+    webots_world_hash: str = ""
+    spawn_pose: Annotated[list[float], Field(min_length=3, max_length=3)] = [0., 0., 0.]
+    spawn_height: float = Field(default=.002, ge=-100, le=100)
     drive: DriveSettings = Field(default_factory=DriveSettings)
     environment: EnvironmentSettings = Field(default_factory=EnvironmentSettings)
     mapping: MapSettings = Field(default_factory=MapSettings)
@@ -65,6 +69,9 @@ class RobotConfiguration(Settings):
         if m.inflation_radius < d.collision_radius:
             raise ValueError("Map inflation must cover the configured robot collision radius")
         a,b,c,e = self.environment.bounds
-        if m.origin[0] > a or m.origin[1] > b or m.origin[0]+m.width*m.resolution < c or m.origin[1]+m.height*m.resolution < e:
+        if self.webots_world:
+            if not (m.origin[0] <= self.spawn_pose[0] < m.origin[0]+m.width*m.resolution and m.origin[1] <= self.spawn_pose[1] < m.origin[1]+m.height*m.resolution):
+                raise ValueError("Spawn must be inside the mapping bounds")
+        elif m.origin[0] > a or m.origin[1] > b or m.origin[0]+m.width*m.resolution < c or m.origin[1]+m.height*m.resolution < e:
             raise ValueError("Occupancy map must cover the configured room")
         return self

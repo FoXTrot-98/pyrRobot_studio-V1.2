@@ -4,6 +4,10 @@ import type { RobotConfiguration, RobotInspection, RobotPackage, SetupDefaults, 
 import { RobotSetupPreview } from "./RobotSetupPreview";
 import "../styles/robot-setup.css";
 
+function retainWorld(robot:RobotConfiguration, current:RobotConfiguration):RobotConfiguration {
+  if (!current.webots_world) return robot;
+  return {...robot,webots_world:current.webots_world,webots_world_hash:current.webots_world_hash,spawn_pose:current.spawn_pose,spawn_height:current.spawn_height,environment:current.environment,mapping:{...current.mapping,inflation_radius:Math.max(current.mapping.inflation_radius,robot.mapping.inflation_radius)}};
+}
 const STEPS = ["Robot model", "Drive", "Sensors", "Review"];
 export function RobotSetupWizard({ projectName, positions, initialModel, onClose, onApplied }: {
   initialModel?:RobotPackage;
@@ -31,8 +35,8 @@ export function RobotSetupWizard({ projectName, positions, initialModel, onClose
         const inspected = await api.inspectRobot(source.robot_urdf,source.robot_assets);
         if (!active) return;
         setRobot(inspected);
-        setDraft({ robot_urdf:source.robot_urdf, robot_assets:source.robot_assets, robot_config:initialModel?inspected.suggested_config:initial.robot_config, name:projectName,
-          target:initial.node_count ? "configure" : "builtin", revision:initial.revision, positions });
+        setDraft({ robot_urdf:source.robot_urdf, robot_assets:source.robot_assets, robot_config:initialModel?retainWorld(inspected.suggested_config,initial.robot_config):initial.robot_config, name:projectName,
+          target:initial.node_count ? "configure" : initial.robot_config.webots_world ? "webots" : "builtin", revision:initial.revision, positions });
       }
     }).catch(e => { if (active) setError(String(e)); }).finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
@@ -44,9 +48,9 @@ export function RobotSetupWizard({ projectName, positions, initialModel, onClose
     try {
       const inspected = await api.inspectRobot(xml,assets);
       setRobot(inspected);
-      setDraft({ robot_urdf:xml, robot_assets:assets, robot_config:inspected.suggested_config,
+      setDraft({ robot_urdf:xml, robot_assets:assets, robot_config:retainWorld(inspected.suggested_config,defaults.robot_config),
         name:projectName === "Untitled robot" ? inspected.name : projectName,
-        target:defaults.node_count ? "configure" : "builtin", revision:defaults.revision, positions });
+        target:defaults.node_count ? "configure" : defaults.robot_config.webots_world ? "webots" : "builtin", revision:defaults.revision, positions });
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   };

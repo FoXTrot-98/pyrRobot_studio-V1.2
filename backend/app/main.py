@@ -37,6 +37,8 @@ from core.runtime.session import Runtime
 from core.runtime.graph import GraphError
 from core.runtime.project import ProjectDocument, Position
 from core.simulation.config import RobotConfiguration
+from core.simulation.world_catalog import WorldRequest, catalog as world_catalog, draft as world_draft
+from core.runtime.project import prepare_project
 from core.runtime.robot_setup import SetupRequest, inspect_robot, draft_project, revision, EXAMPLE
 from core.simulation.webots_examples import PROFILES, example_project
 from core.runtime.plugin_builder import Builder, Draft, TestRequest, generate
@@ -354,6 +356,43 @@ def update_robot_config(configuration: RobotConfiguration):
         return runtime.set_robot_config(configuration)
     except (GraphError, ValueError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@app.get('/api/simulation/worlds')
+@serialized
+def simulation_worlds():
+    return world_catalog(runtime)
+
+
+def checked_world(request):
+    document,info=world_draft(runtime,request)
+    candidate,_=prepare_project(document,runtime.bus,runtime.registry)
+    try:
+        errors=candidate.preflight()
+        if errors:raise ValueError('; '.join(e['message'] for e in errors))
+    finally:candidate.close()
+    return document,info
+
+
+@app.post('/api/simulation/worlds/preview')
+@serialized
+def preview_world(request:WorldRequest):
+    try:
+        _,info=checked_world(request)
+        return info
+    except (ValueError,GraphError,OSError,KeyError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@app.post('/api/simulation/worlds/apply')
+@serialized
+def apply_world(request:WorldRequest):
+    try:
+        if not request.reset_mission or not request.source_hash:raise ValueError('Check the world and acknowledge resetting saved maps and missions first')
+        document,_=checked_world(request)
+        return runtime.load_project(document)
+    except (ValueError,GraphError,OSError,KeyError) as exc:
+        raise HTTPException(400,str(exc)) from exc
 
 
 @app.post("/api/graph/nodes")

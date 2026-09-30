@@ -84,7 +84,7 @@ def overview_viewpoint(bounds):
     return position, [*(rotation[:, 0]/angle), angle]
 
 
-def generate_project(directory, model, config, port, token):
+def generate_project(directory, model, config, port, token, executable=""):
     directory = Path(directory)
     worlds = directory/"worlds"
     controller = directory/"controllers/pyrobot_controller"
@@ -122,6 +122,7 @@ def generate_project(directory, model, config, port, token):
             physics Physics {{ density -1 mass 0.3 }} }} }}''')
     lidar = mounts["lidar_link"]
     camera = mounts["camera_link"]
+    children.append('Gyro { name "imu_gyro" xAxis FALSE yAxis FALSE zAxis TRUE }')
     children += [f'''Lidar {{ translation {lidar[0]} {lidar[1]} {mounts['lidar_link_height']}
         rotation 0 0 1 {lidar[2]} name "lidar" horizontalResolution 360 fieldOfView 6.283185307
         verticalFieldOfView 0.03 numberOfLayers 1 minRange 0.05 maxRange 9 noise 0.0005 }}''',
@@ -144,13 +145,17 @@ DirectionalLight {{ direction -0.3 0.4 -1 intensity 1 }}
 Solid {{ translation {(a+c)/2} {(b+d)/2} -0.05 name "floor" contactMaterial "floor"
   children [ {box([c-a+1,d-b+1,.1], "0.55 0.6 0.63")} ] boundingObject Box {{ size {c-a+1} {d-b+1} 0.1 }} }}
 {' '.join(obstacles)}
-DEF PYROBOT Robot {{ translation 0 0 0.002 name "PyRobot four wheel" supervisor TRUE
+DEF PYROBOT Robot {{ translation {config.spawn_pose[0]} {config.spawn_pose[1]} {config.spawn_height} rotation 0 0 1 {config.spawn_pose[2]} name "PyRobot four wheel" supervisor TRUE
   controller "pyrobot_controller" controllerArgs [ "{port}" "{token}" ]
   children [ {' '.join(children)} ]
   boundingObject Pose {{ translation {vector(body_center)} children [ Box {{ size {vector(body_size)} }} ] }}
   physics Physics {{ density -1 mass 8 centerOfMass [ {vector(body_center)} ] }} }}
 '''
     path = worlds/"pyrobot.wbt"
+    if config.webots_world:
+        from core.simulation.external_world import compose
+        world=compose(config.webots_world,world,executable,config.webots_world_hash)
+        (Path(directory)/'SOURCE.txt').write_text(f'Source world: {config.webots_world}\nSHA256: {config.webots_world_hash}\nExisting top-level robots replaced. Relative assets reference the original project.\n',encoding='utf-8')
     path.write_text(world, encoding="utf-8")
     (controller/"robot.json").write_text(json.dumps({"radius": radius, "track": track,
         "joints": drive.left_joints+drive.right_joints, "mounts": mounts,

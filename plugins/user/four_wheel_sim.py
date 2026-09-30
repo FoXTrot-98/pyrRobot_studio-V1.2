@@ -21,12 +21,14 @@ class FourWheelSimulation(Node):
     )
 
     def validate_configuration(self):
+        if self.robot_config.webots_world:
+            raise ValueError("External Webots worlds require the Webots simulator")
         robot_dimensions(self.robot_model, self.robot_config)
         from core.simulation.mesh_robot import validate_simulation_model
         validate_simulation_model(self.robot_model, self.robot_config)
         if self.urdf_link != self.robot_config.drive.base_frame:
             raise ValueError("Simulator URDF binding must match configured base_frame")
-        if collision(np.zeros(3), self.robot_config.drive.collision_radius, self.robot_config.environment.boxes()):
+        if collision(np.asarray(self.robot_config.spawn_pose), self.robot_config.drive.collision_radius, self.robot_config.environment.boxes()):
             raise ValueError("Robot starting position collides with the configured environment")
 
     def on_start(self):

@@ -11,6 +11,7 @@ class SavedMap(BaseModel):
     grid: list[list[StrictInt]] = Field(min_length=1,max_length=512)
     captured_pose: tuple[float,float,float]
     home_poses: dict[str,tuple[float,float,float]] = Field(default_factory=dict,max_length=32)
+    webots_world_hash: str = ""
     environment: dict
 
     @model_validator(mode="after")
@@ -25,6 +26,6 @@ class SavedMap(BaseModel):
 
     def check_config(self, config):
         m=config.mapping
-        if (self.resolution!=m.resolution or list(self.origin)!=list(m.origin) or
+        if (self.webots_world_hash!=config.webots_world_hash or self.resolution!=m.resolution or list(self.origin)!=list(m.origin) or
             len(self.grid)!=m.height or len(self.grid[0])!=m.width or self.environment!=config.environment.model_dump(mode="json")):
             raise ValueError("Saved map does not match map geometry/environment. Remove the saved map before changing these settings.")

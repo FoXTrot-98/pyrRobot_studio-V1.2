@@ -13,6 +13,7 @@ interface Props {
   onProjectName: (name: string) => void;
   onSaveProject: () => void;
   onOpenProject: (file: File) => void;
+  onWorldSetup: () => void;
   onRobotSetup: () => void;
   onExamples: () => void;
   onDeploy: () => void;
@@ -20,7 +21,7 @@ interface Props {
   onModelBuilder: () => void;
 }
 
-export function TopBar({ robot, onUploadUrdf, connected, timecode, running, onToggleRunning, busy, projectName, onProjectName, onSaveProject, onOpenProject, onRobotSetup, onExamples, onDeploy, onPluginBuilder, onModelBuilder }: Props) {
+export function TopBar({ robot, onUploadUrdf, connected, timecode, running, onToggleRunning, busy, projectName, onProjectName, onSaveProject, onOpenProject, onWorldSetup, onRobotSetup, onExamples, onDeploy, onPluginBuilder, onModelBuilder }: Props) {
   const projectInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -35,6 +36,7 @@ export function TopBar({ robot, onUploadUrdf, connected, timecode, running, onTo
       </div>
 
       <button className="robot-select raised-sm" disabled={busy || running} onClick={onRobotSetup}>Robot setup</button>
+      <button className="robot-select raised-sm" disabled={busy || running} onClick={onWorldSetup}>World setup</button>
       <button className="robot-select raised-sm" disabled={busy || running} onClick={onExamples}>Examples</button>
       <button className="robot-select raised-sm" disabled={busy} onClick={onDeploy}>Deploy</button>
       <button className="robot-select raised-sm" disabled={busy||running} onClick={onPluginBuilder}>Plugin Builder</button>
