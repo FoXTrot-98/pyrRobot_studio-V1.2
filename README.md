@@ -57,10 +57,91 @@ Stop the graph before closing the terminals with Ctrl+C.
   Detailed STEP assemblies are simplified to fit the mesh budget.
 - Guided four-wheel robot setup, built-in simulation, Rerun visualization,
   Webots integration, keyboard control, local lidar SLAM and waypoint navigation.
+- Model Builder bundles transfer embedded meshes, normals and display colors into
+  Robot setup without manually copying mesh files.
+- **World setup** in the top bar selects an installed or local Webots world,
+  spawn pose and mapping bounds, before or after robot setup. Supported worlds
+  are inspected before application; the installed catalog is not a compatibility list.
+- A* and Dijkstra planning, proportional and fuzzy path following, frontier
+  exploration, return home, and mission pause/cancel controls. Exploration in
+  arbitrary unknown environments is not yet qualified.
 - Versioned project save/open. Version 4 adds explicit map snapshots and starting-pose confirmation. Version 3 embeds Model Builder meshes, normals
   and display colors; versions 1 and 2 remain readable.
 - Authenticated deployment agent with compatibility checks, project transfer,
   remote start/stop, health and logs.
+
+## Model-to-simulation workflow
+
+1. Import STEP/OBJ geometry in Model Builder, arrange frames and joints, and export
+   a robot bundle. Alternatively, use a supported URDF or the sample robot.
+2. Open **World setup** to choose an external Webots environment if needed. Check
+   the world, review the spawn and mapping bounds, then apply it. Changing worlds
+   clears saved maps and resets mission settings.
+3. Open **Robot setup**, load the robot, assign its four wheels and level lidar/camera
+   frames, and check the configuration. Use the Webots target for external worlds.
+4. Start the graph in Stop mode. Inspect the spawn and clearance in Webots before
+   choosing manual driving or an autonomous mission. Save the project to retain
+   the robot and world settings.
+
+External worlds require an installed Webots and supported R2025 ENU (Z-up)
+worlds. Studio removes existing top-level robots and inserts the configured robot;
+Robot-based actors/devices can also be removed and are listed in the preview.
+Original files remain unchanged. Keep referenced world files and assets available
+on the backend computer: project JSON does not bundle them. See
+[World setup](docs/SIMULATION_WORLDS.md) for supported structures and restrictions.
+
+## Latest verification
+
+The local Windows review of **V1.3.3 (`8deecc8`)**, on **2026-10-01**, passed:
+
+- All 29 regression test scripts, with the documented Windows POSIX serial-test skip.
+- Frontend production build and mesh-surface checks.
+- Python dependency consistency checks.
+
+Frontend lint completed with three warnings. This review did not repeat a clean
+installation or live Webots/browser sessions. Earlier bounded Webots mapping
+checks, including delayed scans and car1, are recorded in
+[Mapping alignment](docs/MAPPING_ALIGNMENT.md); they do not qualify every world
+or physical robot. Webots-dependent unit tests skip when its metadata is unavailable.
+
+To run the software checks from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe tests/run_all.py
+cd frontend
+npm.cmd run build
+npm.cmd run lint
+node tests/modelSurface.mjs
+cd ..
+```
+
+The optional car1 STEP input and generated projects are not tracked. Reproducing
+that exact integration scenario requires those local files; the regular suite
+uses committed fixtures. Remote CI success and a fresh installation of this
+revision have not been established by this review.
+
+## Known issues and next priorities
+
+The following issues were identified in the V1.3.3 review and remain open:
+
+- **World dependency validation:** the compatibility hash covers the `.wbt` file,
+  not referenced PROTO or geometry contents. A dependency change can therefore
+  leave an old saved map apparently compatible. Reapply the world and rebuild
+  its map after changing dependencies.
+- **Asset parsing:** the importer treats arbitrary quoted strings as possible
+  asset paths. For example, a node named `wall.png` can be rejected as a missing
+  image even though its name is valid. Asset resolution needs field-aware parsing.
+- **Returning to built-in simulation:** Robot setup retains the selected external
+  world when choosing the built-in target, which then rejects it. Open a built-in
+  example project as a workaround until explicit world clearing is implemented.
+- **Exploration recovery:** an external-world exploration clearance failure is
+  documented in the world guide. Reliable recovery and qualification across
+  multiple environments remain unfinished.
+
+Priorities are to fix these workflow issues, qualify exploration and return-home
+behavior across environments, expose physical/sensor profiles, and improve
+localization confidence and recovery before expanding algorithm choices.
 
 ## Guides
 
@@ -89,6 +170,19 @@ materials/textures and measured mass properties are not imported. Mesh reduction
 is approximate. General live transforms and manipulation planning remain future
 work. Installed plugins execute in the runtime process; draft subprocess tests
 are not a security sandbox. Hardware transports are not verified actuator drivers.
+
+Simulation uses approximate body-box and cylindrical-wheel collisions. Webots
+generation currently fixes body mass at 8 kg, wheel mass at 0.3 kg, motor torque
+at 8 N m, and uses fixed sensor settings and approximate wheel friction/slip.
+These are simulation assumptions, not measured properties of an imported robot.
+
+Webots automatically supplies a gyro without configured noise or bias. When gyro
+measurements are present, SLAM uses their integrated heading and corrects only
+translation through scan matching. The reviewed navigation path consumes sensor
+data, not simulator truth, but idealized heading limits what its mapping results
+demonstrate. Real gyro bias handling, loop closure, automatic relocalization and
+localization-confidence handling are not implemented. Slopes, stairs and dynamic
+scenes are not qualified for this planar navigator.
 
 Projects do not bundle plugin code, Python dependencies, arbitrary external
 assets or model weights. Autosave/undo, desktop installation, automatic hardware
