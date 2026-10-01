@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
 from core.simulation.webots_examples import webots_home
+from core.simulation.wheel_contact import WHEEL_FRICTION, WHEEL_FORCE_DEPENDENT_SLIP, wheel_contact_properties
 
 TOKEN = re.compile(r'#[^\n]*|"(?:\\.|[^"\\])*"|[{}\[\]]|[^\s{}\[\]",]+')
 
@@ -132,7 +133,7 @@ def inspect(path, executable=''):
             'dependencies':dependencies,'source':source,
             'warnings':['Spawn floor height and clearance must be checked in Webots. Slopes, stairs and dynamic scenes are not qualified for this planar navigator.',
                         'Remote Webots assets may need network/cache access. Local referenced assets must stay available.',
-                        'Studio adds approximate skid-steer wheel contacts for default/floor and explicitly named materials (friction 0.8, force-dependent slip 0.02).']}
+                        f'Studio adds approximate skid-steer wheel contacts for default/floor and explicitly named materials (friction {WHEEL_FRICTION:g}, force-dependent slip {WHEEL_FORCE_DEPENDENT_SLIP:g}).']}
 
 def available(executable=''):
     home=webots_home(executable)
@@ -156,8 +157,7 @@ def wheel_contacts(source, dependencies=()):
         materials.update(re.findall(r'\b(?:contactMaterial|material1|material2)\s+"([^"\n]+)"', text))
     if material in materials:
         raise ValueError('World uses reserved contact material pyrobot_studio_wheel; rename it before importing')
-    pairs = '\n'.join(f'ContactProperties {{ material1 "{material}" material2 {json.dumps(name)} '
-                      'coulombFriction [ 0.8 ] forceDependentSlip [ 0.02 ] }' for name in sorted(materials))
+    pairs = '\n'.join(wheel_contact_properties(material, name) for name in sorted(materials))
     info = next(b for b in blocks(source) if b[0]=='WorldInfo' and b[3])
     body = source[info[4]:info[5]]
     ts = tokens(body)

@@ -9,6 +9,7 @@ import numpy as np
 from core.urdf.model import origin_matrix
 from .world import robot_dimensions
 from .mesh_robot import collision_body, mesh_data, wheel_width
+from .wheel_contact import wheel_contact_properties
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -138,7 +139,7 @@ def generate_project(directory, model, config, port, token, executable=""):
           boundingObject Box {{ size {vector(size)} }} }}''')
     world = f'''#VRML_SIM R2025a utf8
 WorldInfo {{ basicTimeStep 20 coordinateSystem "ENU"
-  contactProperties [ ContactProperties {{ material1 "wheel" material2 "floor" coulombFriction [ 0.8 ] forceDependentSlip [ 0.02 ] }} ] }}
+  contactProperties [ {wheel_contact_properties('wheel', 'floor')} ] }}
 Viewpoint {{ orientation {vector(orientation)} position {vector(eye)} }}
 Background {{ skyColor [ 0.65 0.78 0.9 ] }}
 DirectionalLight {{ direction -0.3 0.4 -1 intensity 1 }}

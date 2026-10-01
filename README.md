@@ -104,6 +104,12 @@ checks, including delayed scans and car1, are recorded in
 [Mapping alignment](docs/MAPPING_ALIGNMENT.md); they do not qualify every world
 or physical robot. Webots-dependent unit tests skip when its metadata is unavailable.
 
+A subsequent exploration/contact-model follow-up ran live Webots checks: two
+12-second sample-robot exploration/return runs passed, followed by automatic
+exploration/return runs for the sample robot and local car1 draft. All reported
+zero contacts. See [exploration regression status](docs/SIMULATION_WORLDS.md#exploration-regression-status-2026-10-01)
+for physical arrival errors and the distinction from the historical failure.
+
 To run the software checks from the repository root:
 
 ```powershell
@@ -135,9 +141,10 @@ The following issues were identified in the V1.3.3 review and remain open:
 - **Returning to built-in simulation:** Robot setup retains the selected external
   world when choosing the built-in target, which then rejects it. Open a built-in
   example project as a workaround until explicit world clearing is implemented.
-- **Exploration recovery:** an external-world exploration clearance failure is
-  documented in the world guide. Reliable recovery and qualification across
-  multiple environments remain unfinished.
+- **Exploration recovery:** the historical external-room failure no longer
+  reproduced in the latest sample-robot checks, including automatic return home.
+  See the world guide for results and stricter regression commands. Escape from
+  genuinely obstructed poses and qualification across environments remain unfinished.
 
 Priorities are to fix these workflow issues, qualify exploration and return-home
 behavior across environments, expose physical/sensor profiles, and improve
@@ -175,6 +182,8 @@ Simulation uses approximate body-box and cylindrical-wheel collisions. Webots
 generation currently fixes body mass at 8 kg, wheel mass at 0.3 kg, motor torque
 at 8 N m, and uses fixed sensor settings and approximate wheel friction/slip.
 These are simulation assumptions, not measured properties of an imported robot.
+Generated and imported Webots worlds share their wheel friction/slip defaults in
+`core/simulation/wheel_contact.py` to prevent inconsistent tuning.
 
 Webots automatically supplies a gyro without configured noise or bias. When gyro
 measurements are present, SLAM uses their integrated heading and corrects only

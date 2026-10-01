@@ -27,6 +27,8 @@ def main():
     parser.add_argument('--world', type=Path)
     parser.add_argument('--spawn', type=float, nargs=3, default=[0.,0.,0.])
     parser.add_argument('--explore-seconds', type=float, default=0)
+    parser.add_argument('--finish-exploration', action='store_true',
+                        help='Wait for exploration to choose return home itself (no operator return command).')
     parser.add_argument('--sensor-only', action='store_true')
     parser.add_argument('--mesh', action='store_true')
     parser.add_argument('--return-home', action='store_true')
@@ -60,7 +62,16 @@ def main():
     with Runtime() as runtime:
         runtime.load_project(doc)
         received = {}
-        handle = runtime.bus.subscribe("node/", lambda m: received.__setitem__(m.topic, m.payload))
+        navigation_failures = []
+        exploration_travel = [0.]
+        def observe(message):
+            received[message.topic] = message.payload
+            if message.topic == 'node/nav/out/path' and message.payload.get('status') in ('navigation_failed', 'stalled'):
+                navigation_failures.append(message.payload)
+            if message.topic == 'node/sim/out/truth':
+                exploration_travel[0] = max(exploration_travel[0], math.dist(
+                    doc.robot_config.spawn_pose[:2], message.payload['pose'][:2]))
+        handle = runtime.bus.subscribe("node/", observe)
         runtime.graph.start()
         simulator = runtime.graph.nodes["sim"].node_obj
         print("Webots log:", simulator.directory/"webots.log", flush=True)
@@ -70,6 +81,13 @@ def main():
                 state = runtime.graph.to_dict()
                 failed = [n for n in state["nodes"] if n["error"]]
                 if failed: raise AssertionError(failed)
+                if args.explore_seconds or args.finish_exploration:
+                    if navigation_failures or time.monotonic()>deadline:
+                        output = ROOT/'artifacts'/'webots-exploration-failure.json'
+                        output.write_text(json.dumps(dict(report=received.get('node/nav/out/path'),
+                            state=received.get('node/slam/out/state'), truth=received.get('node/sim/out/truth'),
+                            failures=navigation_failures),indent=2),encoding='utf-8')
+                        raise AssertionError(f"Exploration failed; diagnostic: {output}; " + str(received.get('node/nav/out/path',{})))
                 if time.monotonic()>deadline: raise AssertionError("Timed out; " + str(received.get("node/nav/out/path",{})))
                 time.sleep(.05)
         wait(lambda: "node/sim/out/camera" in received and "node/slam/out/state" in received, 90)
@@ -88,22 +106,34 @@ def main():
                 return
         else:
             assert abs(scan["ranges"][180]-1.95)<.2, "Lidar forward axis is incorrect"
-        if args.explore_seconds:
-            start=truth['pose'][:]
+        if args.explore_seconds or args.finish_exploration:
             runtime.graph.update_node_params('nav',{'explore':True,'enabled':True})
             runtime.graph.update_node_params('drive',{'mode':'autonomous'})
-            deadline=time.monotonic()+args.explore_seconds
-            wait(lambda: time.monotonic()>=deadline,args.explore_seconds+5)
+            if args.finish_exploration:
+                wait(lambda: received.get('node/nav/out/path',{}).get('status')=='home_reached',120)
+            else:
+                deadline=time.monotonic()+args.explore_seconds
+                wait(lambda: time.monotonic()>=deadline,args.explore_seconds+5)
             truth=received['node/sim/out/truth']
-            assert math.dist(start[:2],truth['pose'][:2])>.3, 'Exploration did not move'
+            assert exploration_travel[0]>.3, 'Exploration did not move'
             assert truth['collisions']==0
             print('Exploration pose:',truth['pose'],'status:',received['node/nav/out/path']['status'],flush=True)
             home=received['node/nav/out/path']['home_pose']
-            runtime.graph.update_node_params('nav',{'explore':False,'return_home':True,'enabled':True})
-            wait(lambda: received.get('node/nav/out/path',{}).get('status')=='home_reached',90)
+            if not args.finish_exploration:
+                runtime.graph.update_node_params('nav',{'explore':False,'return_home':True,'enabled':True})
+                wait(lambda: received.get('node/nav/out/path',{}).get('status')=='home_reached',90)
             truth=received['node/sim/out/truth']
             assert math.dist(truth['pose'][:2],home[:2])<.4, truth
             assert truth['collisions']==0
+            assert not navigation_failures, navigation_failures
+            heading_error=(truth['pose'][2]-home[2]+math.pi)%(2*math.pi)-math.pi
+            assert abs(heading_error)<.2, truth
+            result=dict(world=str(args.world),project=str(args.project),planner=args.planner,
+                controller=args.controller,automatic_return=args.finish_exploration,
+                max_displacement=exploration_travel[0],home=home,pose=truth['pose'],
+                home_error=math.dist(truth['pose'][:2],home[:2]),heading_error=heading_error,
+                collisions=truth['collisions'],report=received['node/nav/out/path'])
+            (ROOT/'artifacts'/'webots-exploration.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
             runtime.graph.stop();handle.close()
             assert simulator._process.poll() is not None
             print('PASS imported-world exploration and return home:',truth['pose'],flush=True)

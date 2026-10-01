@@ -13,6 +13,19 @@ ROOT=Path(__file__).resolve().parents[1]
 WORLD=ROOT/'tests/fixtures/external-room.wbt'
 
 class WheelContactTests(unittest.TestCase):
+    def test_tuning_shared_profile_updates_both_world_generators(self):
+        from core.simulation.webots_project import generate_project
+        from core.simulation.config import RobotConfiguration
+        from core.urdf.model import load_urdf
+        model = load_urdf(ROOT/'examples/four-wheel/robot.urdf')
+        with patch('core.simulation.wheel_contact.WHEEL_FRICTION', .63), patch(
+                'core.simulation.wheel_contact.WHEEL_FORCE_DEPENDENT_SLIP', .017), tempfile.TemporaryDirectory() as folder:
+            generated = generate_project(folder, model, RobotConfiguration(), 12345, 'test-token').read_text()
+            imported = wheel_contacts('WorldInfo {} Solid { contactMaterial "ice" }')
+        for world in (generated, imported):
+            self.assertIn('coulombFriction [ 0.63 ] forceDependentSlip [ 0.017 ]', world)
+            self.assertNotIn('coulombFriction [ 0.8 ]', world)
+
     def test_import_retains_environment_contacts_and_adds_private_wheel_pairs(self):
         original='ContactProperties { material1 "ice" material2 "default" coulombFriction [ 0.1 ] }'
         source='WorldInfo { contactProperties [ '+original+' ] } Solid { contactMaterial "ice" }'

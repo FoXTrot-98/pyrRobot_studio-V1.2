@@ -56,4 +56,4 @@ The Webots diagnostic compares sensor/SLAM and actual poses at matching timestam
 3. Confirm the world and spawn, then start. First drive a short straight segment and a left/right turn. The mesh and yellow estimate should remain close, and static walls should stay in place as the car rotates.
 4. Try a short waypoint mission before a long exploration run.
 
-Local SLAM still lacks loop closure/global relocalization. Slippery floors, repeated geometry and unobservable motion can cause drift; external-world exploration clearance recovery remains a separate known limitation. These fixes do not qualify every world or calibrate a real robot's physics.
+Local SLAM still lacks loop closure/global relocalization. Slippery floors, repeated geometry and unobservable motion can cause drift. The historical external-room exploration failure did not reproduce in the latest sample-robot checks; see [exploration regression status](SIMULATION_WORLDS.md#exploration-regression-status-2026-10-01) for results and commands. Automatic escape from a genuinely obstructed pose remains unsupported. These fixes do not qualify every world or calibrate a real robot's physics.
