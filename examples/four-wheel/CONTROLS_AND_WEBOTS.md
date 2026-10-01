@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Keyboard, waypoint missions and Webots
 
 Restart the backend and frontend after this update. These projects use the same

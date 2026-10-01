@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Saved maps and the simulation workspace
 
 The simulation panel uses three tabs: **Navigate** for missions, home and exploration; **Maps** for snapshots and starting-pose confirmation; **Settings** for planners and controllers. Motion status, drive mode and pause remain accessible outside the tabs. Flat cards, consistent spacing and labeled fields replace the long ungrouped controls list.

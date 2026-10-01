@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # PyRobot Studio frontend
 
 React/TypeScript Studio UI for the FastAPI backend. Follow the root

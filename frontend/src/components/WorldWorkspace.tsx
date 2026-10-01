@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+// SPDX-License-Identifier: Apache-2.0
+
 import { useEffect, useState } from "react";
 import { api, type WorldCatalog, type WorldPreview } from "../api/client";
 export function WorldWorkspace({running,onApplied,onBusyChange}:{running:boolean;onApplied:()=>Promise<void>;onBusyChange?:(value:boolean)=>void}) {

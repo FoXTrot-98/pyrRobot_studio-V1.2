@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Built-in reference robot: inputs/outputs can later be replaced by drivers."""
 import base64
 import threading

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Optional browser + real agent test, using a non-actuating fake IMU project."""
 import os
 import secrets

@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Four-wheel navigation reference
 
 For **keyboard driving, clickable waypoint missions and Webots physics**, use

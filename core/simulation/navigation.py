@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Encoder odometry, local scan-to-submap SLAM, occupancy A* and path following.
 
 Algorithms consume sensor messages only. No simulator obstacle list or true pose

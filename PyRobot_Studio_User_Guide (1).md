@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 > Historical guide: retained for reference. Use [README](README.md) for current installation, supported versions and capabilities, and [Baseline verification](docs/BASELINE.md) for acceptance checks. The prerequisites and phase descriptions below describe an earlier revision.
 
 # PyRobot Studio — User Guide

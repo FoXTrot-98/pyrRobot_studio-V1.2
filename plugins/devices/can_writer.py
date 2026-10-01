@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """
 CAN Bus Writer — the output-side counterpart to can_reader.py. Subscribes
 to an input port and transmits each incoming message as a CAN frame.

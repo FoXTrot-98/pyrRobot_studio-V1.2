@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+// SPDX-License-Identifier: Apache-2.0
+
 import type { GraphState, PluginManifest, RobotInfo } from "../types";
 import type { RobotInspection, RobotPackage, SetupDefaults, SetupDraft, SetupSummary } from "../types/setup";
 import type { ModelPreview, RobotBuilderModel } from "../types/modelBuilder";

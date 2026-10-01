@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Robot Model Builder: CAD assembly to URDF
 
 PyRobot Studio now treats STEP/STP assembly import as the recommended CAD-to-robot workflow. OBJ remains supported for mesh-only fallback imports.

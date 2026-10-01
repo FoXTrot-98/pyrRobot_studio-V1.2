@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Optional browser smoke test. Requires playwright and installed Microsoft Edge.
 
 Starts isolated backend/frontend processes and always terminates its own servers.

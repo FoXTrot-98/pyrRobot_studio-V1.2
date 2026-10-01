@@ -1,15 +1,24 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 .app-shell { display: flex; flex-direction: column; height: 100vh; gap: 14px; padding: 14px; }
 
 /* ---- topbar ---- */
-.topbar { height: 64px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-radius: var(--radius-lg); }
-.brand { display: flex; align-items: center; gap: 10px; }
+.topbar { flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 20px; border-radius: var(--radius-lg); }
+.brand { grid-column: 1; grid-row: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.brand > div:last-child { min-width: 0; }
+.brand-name, .brand-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand-mark { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-size: 14px; }
 .brand-name { font-weight: 600; font-size: 15px; letter-spacing: 0.2px; }
 .brand-sub { color: var(--text-tertiary); font-size: 11px; margin-top: -2px; }
 .robot-select { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: var(--radius-md); font-size: 12px; color: var(--text-secondary); cursor: pointer; border: none; font-family: inherit; white-space: nowrap; max-width: 260px; }
 .robot-select b { color: var(--text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; display: inline-block; vertical-align: bottom; }
 .robot-select svg { flex-shrink: 0; width: 12px; height: 12px; }
-.topbar-right { display: flex; align-items: center; gap: 16px; }
+.topbar-right { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 16px; }
+.topbar-tools { grid-column: 1 / -1; grid-row: 2; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.topbar-right .run-btn { flex-shrink: 0; white-space: nowrap; }
 .timecode { padding: 10px 16px; border-radius: var(--radius-md); font-size: 18px; letter-spacing: 2px; display: flex; align-items: center; gap: 10px; }
 .timecode .rate { font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.5px; }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); animation: pulse 1.4s infinite; }
@@ -110,10 +119,15 @@
 .insp-remove-btn { width: 100%; margin-top: 24px; padding: 10px; border-radius: var(--radius-sm); border: none; background: var(--bg); color: var(--danger); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 3px 3px 7px var(--shadow-dark-soft), -3px -3px 7px var(--shadow-light); }
 .insp-remove-btn:active { box-shadow: inset 2px 2px 5px var(--shadow-dark-soft), inset -2px -2px 5px var(--shadow-light); }
 
-.project-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.project-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
 .project-name { width: 150px; padding: 8px; border: none; color: var(--text-primary); background: var(--bg); border-radius: 8px; }
 .canvas-hint { font-size: 11px; color: var(--text-secondary); margin-left: 12px; }
-.topbar { flex-wrap: wrap; gap: 12px; }
+@media (max-width: 700px) {
+  .topbar { padding: 12px; }
+  .topbar-right .timecode { display: none; }
+  .brand-mark { flex-shrink: 0; }
+  .project-controls { margin-left: 0; }
+}
 button:disabled { opacity: .5; cursor: not-allowed; }
 .workspace-center { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
 .workspace-center > .canvas-wrap { flex: 1; min-height: 220px; }

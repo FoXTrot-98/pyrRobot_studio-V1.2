@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+// SPDX-License-Identifier: Apache-2.0
+
 import { useEffect, useRef, useState } from "react";
 import { api, type WebotsExample } from "../api/client";
 import type { BusMessage } from "../types";

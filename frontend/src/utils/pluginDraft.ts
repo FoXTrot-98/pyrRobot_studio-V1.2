@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+// SPDX-License-Identifier: Apache-2.0
+
 export interface BuilderPort { name: string; data_type: string; schema: string | null; required: boolean }
 export interface BuilderParameter { name: string; kind: string; value: string; min: string; max: string }
 export interface PluginDraft {

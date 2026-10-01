@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Plugin manifest — the introspectable description of a node that lets the
 Studio UI auto-generate node cards, ports, and parameter forms WITHOUT any

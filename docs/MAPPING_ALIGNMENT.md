@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Car1 pose and mapping alignment
 
 The 3D mesh shows the physical simulator pose. The yellow box shows SLAM's estimated pose, which the planner uses. They intentionally remain separate: snapping the mesh to the estimate would conceal localization errors. No ground-truth pose or world obstacle list is fed into SLAM/navigation.

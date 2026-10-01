@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Optional guided setup UI test; owns isolated servers and a headless browser."""
 import os
 import subprocess

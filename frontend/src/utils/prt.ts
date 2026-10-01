@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+// SPDX-License-Identifier: Apache-2.0
+
 export function formatTimecode(epochNs: number, rateHz = 30): string {
   const totalSeconds = epochNs / 1e9;
   const hh = Math.floor(totalSeconds / 3600);

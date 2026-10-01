@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 .plugin-builder { width: min(1250px, 94vw); max-height: 92vh; overflow: auto; padding: 24px; background: var(--bg, #f2f3f5); color: #202733; border: 1px solid #abb4bf; border-radius: 12px; }
 .plugin-builder::backdrop { background: #17243688; }
 .plugin-builder header { display:flex; align-items:center; justify-content:space-between; position:sticky; top:-24px; z-index:2; background:var(--bg, #f2f3f5); padding:8px 0; }

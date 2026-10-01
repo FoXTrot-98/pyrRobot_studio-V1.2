@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+// SPDX-License-Identifier: Apache-2.0
+
 import type { Node } from "reactflow";
 import type { StudioNodeData } from "../hooks/useGraph";
 import type { BusMessage } from "../types";

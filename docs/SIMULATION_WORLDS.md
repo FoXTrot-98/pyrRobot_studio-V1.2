@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Selecting existing Webots worlds
 
 World setup is a separate button beside Robot setup in the top bar. It works with an empty project or an existing supported four-wheel simulation. Stop Graph before changing worlds.

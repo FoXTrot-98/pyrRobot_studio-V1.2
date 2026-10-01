@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Opt-in car1 integration test; estimated CAD setup, never physical hardware.
 
 Run after import, or use --import-step to rebuild the cached editable model.

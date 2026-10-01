@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Portable reference-simulator configuration stored in the project document."""
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator

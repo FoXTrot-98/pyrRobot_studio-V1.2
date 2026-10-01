@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Deterministic planar kinematics, ray-cast lidar and a perspective camera.
 
 This is a geometric simulator: no suspension, friction or full rigid-body physics.

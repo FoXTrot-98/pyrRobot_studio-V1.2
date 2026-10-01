@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Bounded, embedded robot meshes. No filesystem or URL resolution is performed."""
 import io
 import json

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Optional extended Webots diagnostic: repeated turns and waypoint missions."""
 import argparse
 import json

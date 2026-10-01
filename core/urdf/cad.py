@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """CAD assembly import for robot models.
 
 STEP/STP is treated as the primary CAD interchange format. The importer uses

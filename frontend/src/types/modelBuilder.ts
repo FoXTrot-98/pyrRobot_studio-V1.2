@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+// SPDX-License-Identifier: Apache-2.0
+
 export type Vector3 = [number, number, number];
 export interface ModelPart { id:string; name:string; vertices:Vector3[]; faces:number[][]; normals?:(Vector3|null)[][]|null; smoothing?:(string|null)[]|null; colors?:Vector3[]|null }
 export interface ModelLink {

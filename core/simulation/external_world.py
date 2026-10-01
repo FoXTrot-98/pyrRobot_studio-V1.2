@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Inspect and adapt local Webots worlds without modifying their source files.
 
 Supports ENU worlds, native nodes, installed Webots PROTOs and simple local

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 # Two rigid boxes, in metres. Select the arm component to create a joint.
 # Suggested arm pivot: 0.1 0 0.15; axis: 0 0 1.
 o base

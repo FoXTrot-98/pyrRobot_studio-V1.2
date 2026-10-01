@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+// SPDX-License-Identifier: Apache-2.0
+
 import type { ModelPart, Vector3 } from '../types/modelBuilder';
 
 const unit=(v:number[]):Vector3=>{const length=Math.hypot(...v)||1;return v.map(x=>x/length) as Vector3;};

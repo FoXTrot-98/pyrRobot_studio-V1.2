@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Run each test script in isolation, with a timeout and portable temp paths."""
 import os
 from pathlib import Path

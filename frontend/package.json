@@ -22,5 +22,7 @@
     "oxlint": "^1.79.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
-  }
+  },
+  "license": "Apache-2.0",
+  "author": "Kanishka Kularathna (FoXTrot-98)"
 }

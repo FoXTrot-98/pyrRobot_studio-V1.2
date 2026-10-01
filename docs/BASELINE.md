@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Reproducible engineering baseline
 
 See the [verification record](BASELINE_VERIFICATION.md) for the tested revision, environment, results and known limits.

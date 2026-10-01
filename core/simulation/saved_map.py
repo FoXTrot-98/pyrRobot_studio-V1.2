@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Portable occupancy snapshots; operator pose initialization is not localization."""
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator

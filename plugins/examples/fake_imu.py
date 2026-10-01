@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Example plugin: publishes synthetic IMU readings at a fixed rate.
 Demonstrates the minimum a plugin author needs to write.

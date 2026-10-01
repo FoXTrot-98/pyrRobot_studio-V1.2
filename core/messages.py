@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Versioned robotics payload contracts. Distances: metres; angles: radians.
 
 Legacy ports may omit a schema. A typed input only accepts the exact schema ID.

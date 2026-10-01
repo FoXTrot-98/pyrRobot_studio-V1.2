@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Connect and deploy to a robot computer
 
 Studio's **Deploy** screen connects to a separate PyRobot agent. It checks a snapshot of the current project against the robot's installed plugins and configuration, transfers it, starts/stops the remote graph, and reads node health and recent agent logs. Manual address connection is supported; automatic network discovery is a future feature.

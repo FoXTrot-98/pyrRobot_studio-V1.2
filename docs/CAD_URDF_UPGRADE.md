@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # CAD-first URDF Builder upgrade
 
 This revision changes Model Builder from an OBJ-first manual mesh workflow to a CAD-first workflow.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Bus broker: a standalone XSUB/XPUB proxy that every node/plugin connects
 to. This is what makes multi-process pub/sub actually work — individual

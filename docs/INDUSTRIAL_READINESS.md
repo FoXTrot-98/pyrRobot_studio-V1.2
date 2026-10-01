@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Industrial hardening status
 
 This is an engineering progress record, not an industrial certification or a claim that every robot is supported.

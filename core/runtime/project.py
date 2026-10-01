@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Version 1/2 projects, version 3 mesh assets and version 4 map snapshots.
 
 Plugin source, arbitrary external files and dependencies remain separate.

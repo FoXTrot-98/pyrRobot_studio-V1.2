@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """CAD/OBJ builder workflow and built-in simulation; no physical hardware is used."""
 import io
 import json

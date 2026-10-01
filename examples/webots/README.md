@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Existing Webots robots in Studio
 
 Start Studio's backend and frontend normally. In Studio choose **Examples**, open a robot, then **Start Graph**. Webots opens its original 3D world; Studio displays action buttons and Rerun joint telemetry. Stop Graph closes the Webots process Studio started. Save project exports your graph and settings.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Bounded OBJ import, editable rigid-link model, kinematics and URDF bundle export."""
 import io
 import math

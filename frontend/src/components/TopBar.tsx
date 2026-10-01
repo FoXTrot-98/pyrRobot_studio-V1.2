@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+// SPDX-License-Identifier: Apache-2.0
+
 import { useRef } from "react";
 import type { RobotInfo } from "../types";
 
@@ -31,46 +34,48 @@ export function TopBar({ robot, onUploadUrdf, connected, timecode, running, onTo
         <div className="brand-mark raised-sm">◈</div>
         <div>
           <div className="brand-name">PyRobot Studio</div>
-          <div className="brand-sub mono">v4.0.0-dev</div>
+          <div className="brand-sub mono">v4.0.0-dev · by <a href="https://github.com/FoXTrot-98" target="_blank" rel="noopener noreferrer" title="Originally created by Kanishka Kularathna (FoXTrot-98)">FoXTrot-98</a></div>
         </div>
       </div>
 
-      <button className="robot-select raised-sm" disabled={busy || running} onClick={onRobotSetup}>Robot setup</button>
-      <button className="robot-select raised-sm" disabled={busy || running} onClick={onWorldSetup}>World setup</button>
-      <button className="robot-select raised-sm" disabled={busy || running} onClick={onExamples}>Examples</button>
-      <button className="robot-select raised-sm" disabled={busy} onClick={onDeploy}>Deploy</button>
-      <button className="robot-select raised-sm" disabled={busy||running} onClick={onPluginBuilder}>Plugin Builder</button>
-      <button className="robot-select raised-sm" disabled={busy||running} onClick={onModelBuilder}>Model Builder</button>
-      <button className="robot-select raised-sm" disabled={busy || running} onClick={() => fileInputRef.current?.click()}>
-        <span>Robot:</span> <b>{robot?.name ?? "no URDF loaded"}</b>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".urdf,.xacro"
-        style={{ display: "none" }}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onUploadUrdf(file);
-          e.target.value = "";
-        }}
-      />
+      <div className="topbar-tools">
+        <button className="robot-select raised-sm" disabled={busy || running} onClick={onRobotSetup}>Robot setup</button>
+        <button className="robot-select raised-sm" disabled={busy || running} onClick={onWorldSetup}>World setup</button>
+        <button className="robot-select raised-sm" disabled={busy || running} onClick={onExamples}>Examples</button>
+        <button className="robot-select raised-sm" disabled={busy} onClick={onDeploy}>Deploy</button>
+        <button className="robot-select raised-sm" disabled={busy||running} onClick={onPluginBuilder}>Plugin Builder</button>
+        <button className="robot-select raised-sm" disabled={busy||running} onClick={onModelBuilder}>Model Builder</button>
+        <button className="robot-select raised-sm" disabled={busy || running} onClick={() => fileInputRef.current?.click()}>
+          <span>Robot:</span> <b>{robot?.name ?? "no URDF loaded"}</b>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".urdf,.xacro"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onUploadUrdf(file);
+            e.target.value = "";
+          }}
+        />
 
-      <div className="project-controls">
-        <input className="project-name inset" aria-label="Project name" maxLength={200}
-          value={projectName} onChange={(e) => onProjectName(e.target.value)} />
-        <button className="robot-select raised-sm" disabled={busy || !projectName.trim()} onClick={onSaveProject}>Save project</button>
-        <button className="robot-select raised-sm" disabled={busy || running}
-          title={running ? "Stop the graph before opening a project" : "Open a saved project"}
-          onClick={() => projectInputRef.current?.click()}>Open project</button>
-        <input ref={projectInputRef} type="file" accept=".json,.pyrobot" hidden onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onOpenProject(file);
-          e.target.value = "";
-        }} />
+        <div className="project-controls">
+          <input className="project-name inset" aria-label="Project name" maxLength={200}
+            value={projectName} onChange={(e) => onProjectName(e.target.value)} />
+          <button className="robot-select raised-sm" disabled={busy || !projectName.trim()} onClick={onSaveProject}>Save project</button>
+          <button className="robot-select raised-sm" disabled={busy || running}
+            title={running ? "Stop the graph before opening a project" : "Open a saved project"}
+            onClick={() => projectInputRef.current?.click()}>Open project</button>
+          <input ref={projectInputRef} type="file" accept=".json,.pyrobot" hidden onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onOpenProject(file);
+            e.target.value = "";
+          }} />
+        </div>
       </div>
       <div className="topbar-right">
         <div className="timecode inset mono">

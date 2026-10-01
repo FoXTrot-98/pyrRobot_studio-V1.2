@@ -1,4 +1,16 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # PyRobot Studio
+
+Originally created by **Kanishka Kularathna ([FoXTrot-98](https://github.com/FoXTrot-98))**.
+Community contributions are welcome. Project-owned material is licensed under
+[Apache 2.0](LICENSE); see [NOTICE](NOTICE), [authors](AUTHORS.md) and
+[third-party notices](THIRD_PARTY_NOTICES.md).
+
+To report a bug or propose an improvement, read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 A visual robotics workbench using React, FastAPI, Python plugins and ZeroMQ.
 It supports visual graphs, headless execution, robot modeling, simulation and
@@ -197,4 +209,6 @@ Projects do not bundle plugin code, Python dependencies, arbitrary external
 assets or model weights. Autosave/undo, desktop installation, automatic hardware
 profiles, firmware flashing and AI assistance remain unfinished. The optional
 `car1` integration fixture is local; the regular suite uses committed examples.
-No project license has been selected; redistribution needs a separate review.
+Project-owned files use Apache-2.0. Bundled third-party material retains its own
+notices; external assets and installed dependencies are not relicensed. See
+[licensing scope and file coverage](docs/LICENSING.md) before packaging a distribution.

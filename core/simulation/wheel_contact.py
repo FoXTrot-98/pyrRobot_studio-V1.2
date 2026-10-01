@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared approximate skid-steer contact model for generated/imported worlds.
 
 These defaults permit lateral tire slip while turning. They are not measured

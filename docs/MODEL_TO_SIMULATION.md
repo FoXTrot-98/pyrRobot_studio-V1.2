@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # From Model Builder to simulation
 
 Model Builder robots imported from STEP/STP or OBJ can go directly into guided setup, with embedded visual meshes, smooth normals and the builder's component colors. No mesh extraction or manual file copying is needed. This workflow supports four-wheel differential robots, not arbitrary articulated machines.

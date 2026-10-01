@@ -1,0 +1,177 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+version = 1
+
+[[annotations]]
+path = [".gitignore"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [".node-version"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [".python-version"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["NOTICE"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["To_do.txt"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/four-wheel/navigation.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/four-wheel/teleoperation.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/four-wheel/webots.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/four-wheel_2/navigation.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/four-wheel_2/teleoperation.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/four-wheel_2/webots.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/imu-demo.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/model-builder/four-wheel-rover.robot-builder.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/model-builder/step-demo.step"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/webots/nao.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/webots/panda.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["examples/webots/youbot.pyrobot.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["frontend/.env.example"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["frontend/.gitignore"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["frontend/.oxlintrc.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["frontend/package-lock.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["frontend/package.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["frontend/public/favicon.svg"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2019-present VoidZero Inc. and Vite contributors"]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["frontend/public/icons.svg"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2019-present VoidZero Inc. and Vite contributors"]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["frontend/tsconfig.app.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)", "2019-present VoidZero Inc. and Vite contributors"]
+SPDX-License-Identifier = "Apache-2.0 AND MIT"
+
+[[annotations]]
+path = ["frontend/tsconfig.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)", "2019-present VoidZero Inc. and Vite contributors"]
+SPDX-License-Identifier = "Apache-2.0 AND MIT"
+
+[[annotations]]
+path = ["frontend/tsconfig.node.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)", "2019-present VoidZero Inc. and Vite contributors"]
+SPDX-License-Identifier = "Apache-2.0 AND MIT"
+
+[[annotations]]
+path = ["requirements.lock.txt"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["requirements.txt"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2026 Kanishka Kularathna (FoXTrot-98)"]
+SPDX-License-Identifier = "Apache-2.0"

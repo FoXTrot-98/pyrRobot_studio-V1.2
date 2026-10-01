@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+# SPDX-License-Identifier: Apache-2.0
+
 """Optional wall-time/latency probe. Run separately from integration tests."""
 import argparse,json,os,socket,sys,time,statistics,threading
 from pathlib import Path
