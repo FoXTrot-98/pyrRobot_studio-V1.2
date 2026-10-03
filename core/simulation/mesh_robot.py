@@ -52,10 +52,19 @@ def validate_simulation_model(model, config):
                 raise ValueError(f'{name}: wheel centre height must equal the wheel radius; set the base frame at ground level')
         base_chain = model.path_to_root(config.drive.base_frame)
         if any(j.joint_type != 'fixed' for j in base_chain): raise ValueError('Base frame must have a fixed path to the root')
+    required = required_clearance(model, config)
+    if config.drive.collision_radius + 1e-9 < required:
+        raise ValueError(f'Robot clearance radius must be at least {math.ceil(required*1000)/1000:g} m '
+                         'to cover its body and wheels. Increase Robot clearance and Planning clearance in Robot setup.')
 
 
 def collision_body(model, config):
     validate_simulation_model(model,config)
+    return body_bounds(model, config)
+
+
+def body_bounds(model, config):
+    """The same conservative body box used by the physics generator."""
     points = []
     for name, link in model.links.items():
         transform = model.static_transform(config.drive.base_frame,name)
@@ -69,6 +78,24 @@ def collision_body(model, config):
     low, high = points.min(axis=0),points.max(axis=0)
     if model.assets and low[2] <= 0: raise ValueError('Body collision box touches the ground; raise the body above the base frame')
     return (low+high)/2, np.maximum(high-low,1e-6)
+
+
+def required_clearance(model, config):
+    """Radius enclosing the generated body box and wheel-cylinder footprints.
+
+    Wheel axes are constrained to base +Y by robot_dimensions. Enclosing their
+    projected rectangles is conservative and covers every wheel rotation.
+    """
+    radius, _, _ = robot_dimensions(model, config)
+    center, size = body_bounds(model, config)
+    extent = np.abs(center[:2]) + size[:2]/2
+    required = float(np.linalg.norm(extent))
+    for name in config.drive.left_joints + config.drive.right_joints:
+        joint = model.joints[name]
+        transform = np.asarray(model.static_transform(config.drive.base_frame, joint.parent)['matrix']) @ origin_matrix(joint.origin)
+        extent = np.abs(transform[:2,3]) + [radius, wheel_width(model,joint,transform)/2]
+        required = max(required, float(np.linalg.norm(extent)))
+    return required
 
 
 def wheel_width(model, joint, transform):

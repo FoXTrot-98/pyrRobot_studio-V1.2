@@ -17,10 +17,22 @@ from .world import advance, sensor_pose, wrap
 class WheelOdometry:
     def __init__(self):
         self.pose = np.zeros(3)
-        self.previous = np.zeros(4)
+        self.previous = None
+        self.gyro_origin = None
+
+    def relative_gyro(self, gyro_yaw):
+        if gyro_yaw is None:
+            return None
+        if self.gyro_origin is None:
+            self.gyro_origin = gyro_yaw-self.pose[2]
+        return wrap(gyro_yaw-self.gyro_origin)
 
     def update(self, ticks, radius, track, ticks_per_turn=4096, gyro_yaw=None):
         angles = np.asarray(ticks) * (2*math.pi/ticks_per_turn)
+        gyro_yaw = self.relative_gyro(gyro_yaw)
+        if self.previous is None:
+            self.previous = angles.copy()
+            return self.pose.copy()
         delta = (angles - self.previous) * radius
         self.previous = angles
         left, right = np.mean(delta[:2]), np.mean(delta[2:])

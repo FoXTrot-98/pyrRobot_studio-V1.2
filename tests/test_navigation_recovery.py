@@ -120,5 +120,70 @@ class RecoveryTests(unittest.TestCase):
         self.assert_stopped(node)
         self.assertEqual(self.send(node,.5,1.5)['status'],'navigating')
 
+    def test_blocked_wait_does_not_consume_motion_progress_budget(self):
+        node=self.node(blocked_timeout=8.,progress_timeout=2.)
+        for wall in (0.,1.,3.,6.):
+            report=self.send(node,wall,wall+1,blocked=True)
+            self.assertEqual(report['status'],'no_path')
+            self.assertEqual(report['mission_state'],'recovering')
+            self.assert_stopped(node)
+        # The obstruction clears before its timeout. Give the drive a fresh
+        # progress budget; no motion was commanded during the blocked interval.
+        self.assertEqual(self.send(node,6.2,7.2)['status'],'no_path')  # Replan is rate-limited.
+        self.assertEqual(self.send(node,7.1,8.1)['status'],'navigating')
+        self.assertEqual(self.send(node,8.5,9.5)['status'],'navigating')
+        self.assertEqual(self.send(node,9.2,10.2)['status'],'stalled')
+        self.assert_stopped(node)
+
+    def test_persistent_obstruction_uses_blocked_timeout_then_requires_retry(self):
+        node=self.node(blocked_timeout=4.,progress_timeout=1.)
+        for wall in (0.,1.,2.,3.):
+            self.assertEqual(self.send(node,wall,wall+1,blocked=True)['status'],'no_path')
+        self.assertEqual(self.send(node,4.,5.,blocked=True)['status'],'navigation_failed')
+        self.assertEqual(self.send(node,4.2,5.2)['status'],'navigation_failed')
+        self.assert_stopped(node)
+
+    def test_new_barrier_replans_detour_without_changing_mission(self):
+        node=self.node()
+        first=self.send(node,0.,1.)
+        observation=self.observation(2.1)
+        # Block the old straight route while retaining a wide route around it.
+        for row in range(7,14):
+            observation['grid'][row][15]=100
+        with patch('plugins.user.astar_navigation.time.monotonic',return_value=1.1):
+            node.process('state',observation)
+        report=node.emit.call_args.args[1]
+        self.assertEqual(report['mission_id'],first['mission_id'])
+        self.assertEqual(report['status'],'navigating')
+        self.assertGreater(report['replans'],first['replans'])
+        self.assertTrue(any(abs(point[1])>1. for point in report['points']))
+
+    def test_lidar_obstruction_clears_before_timeout_and_resumes_same_mission(self):
+        node=self.node(blocked_timeout=8.,progress_timeout=1.)
+        first=self.send(node,0.,1.)
+        for wall in (.2,2.,3.,4.):
+            observation=self.observation(wall+1)
+            observation['scan']['ranges']=[.2]*3
+            with patch('plugins.user.astar_navigation.time.monotonic',return_value=wall):
+                node.process('state',observation)
+            self.assertEqual(node.emit.call_args.args[1]['status'],'obstacle_stop')
+            self.assert_stopped(node)
+        report=self.send(node,4.2,5.2)
+        self.assertEqual(report['status'],'navigating')
+        self.assertEqual(report['mission_id'],first['mission_id'])
+
+    def test_alternating_obstruction_does_not_erase_unproductive_driving(self):
+        node=self.node(blocked_timeout=8.,progress_timeout=1.)
+        self.send(node,0.,1.)
+        for wall in (.4,1.4):
+            observation=self.observation(wall+1)
+            observation['scan']['ranges']=[.2]*3
+            with patch('plugins.user.astar_navigation.time.monotonic',return_value=wall):
+                node.process('state',observation)
+            self.assertEqual(node.emit.call_args.args[1]['status'],'obstacle_stop')
+            self.assertEqual(self.send(node,wall+.5,wall+1.5)['status'],'navigating')
+        self.assertEqual(self.send(node,2.2,3.2)['status'],'stalled')
+        self.assert_stopped(node)
+
 
 if __name__=='__main__': unittest.main()

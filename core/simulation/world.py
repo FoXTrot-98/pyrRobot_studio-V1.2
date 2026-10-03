@@ -61,7 +61,9 @@ def raycast(pose, angles, maximum=9.0, obstacles=None):
     return ranges, indices
 
 
-def collision(pose, radius=.48, obstacles=None):
+def collision(pose, radius=None, obstacles=None):
+    if radius is None:
+        radius = RobotConfiguration().drive.collision_radius
     for x0, y0, x1, y1, _ in OBSTACLES if obstacles is None else obstacles:
         closest = np.clip(pose[:2], [x0, y0], [x1, y1])
         if np.linalg.norm(pose[:2] - closest) < radius:

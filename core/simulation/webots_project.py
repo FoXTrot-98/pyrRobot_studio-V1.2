@@ -88,23 +88,26 @@ def overview_viewpoint(bounds):
     return position, [*(rotation[:, 0]/angle), angle]
 
 
-def generate_project(directory, model, config, port, token, executable=""):
+def generate_project(directory, model, config, port, token, executable="", placement_preview=False):
     directory = Path(directory)
     worlds = directory/"worlds"
     controller = directory/"controllers/pyrobot_controller"
     worlds.mkdir(parents=True, exist_ok=True)
     controller.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT/"core/simulation/webots_controller.py", controller/"pyrobot_controller.py")
+    shutil.copyfile(ROOT/"core/simulation/placement_validation.py", controller/"placement_validation.py")
+    shutil.copyfile(ROOT/"core/simulation/placement_search.py", controller/"placement_search.py")
     (controller/"runtime.ini").write_text(f"[python]\nCOMMAND = {sys.executable}\n", encoding="utf-8")
     radius, track, mounts = robot_dimensions(model, config)
     drive = config.drive
+    physics = config.physics
     body_center, body_size = collision_body(model,config)
     children = []
     for link_name, link in model.links.items():
         transform = model.static_transform(drive.base_frame,link_name)
         if transform is not None:
             children.append(visual_shape(model,link,np.asarray(transform['matrix'])))
-    for name in drive.left_joints + drive.right_joints:
+    for wheel_index, name in enumerate(drive.left_joints + drive.right_joints):
         joint = model.joints[name]
         transform = np.asarray(model.static_transform(drive.base_frame, joint.parent)["matrix"]) @ origin_matrix(joint.origin)
         xyz = vector(transform[:3,3])
@@ -117,13 +120,13 @@ def generate_project(directory, model, config, port, token, executable=""):
         wheel_shape = ' '.join(wheel_shape)
         rotation = rotation_text(transform[:3,:3])
         children.append(f'''HingeJoint {{
-          jointParameters HingeJointParameters {{ anchor {xyz} axis 0 1 0 dampingConstant 0.02 }}
-          device [ RotationalMotor {{ name {json.dumps(name)} maxVelocity 20 maxTorque 8 }}
+          jointParameters HingeJointParameters {{ anchor {xyz} axis 0 1 0 dampingConstant {physics.wheel_damping:g} }}
+          device [ RotationalMotor {{ name {json.dumps(name)} maxVelocity {physics.motor_max_velocity:g} maxTorque {physics.motor_max_torque:g} }}
                    PositionSensor {{ name {json.dumps(name + "_encoder")} }} ]
-          endPoint Solid {{ translation {xyz} rotation {rotation} name {json.dumps(joint.child)}
+          endPoint DEF PYROBOT_WHEEL_{wheel_index} Solid {{ translation {xyz} rotation {rotation} name {json.dumps(joint.child)}
             children [ {wheel_shape} ] contactMaterial "wheel"
             boundingObject Pose {{ rotation {rotation_text(transform[:3,:3].T @ np.array([[1,0,0],[0,0,-1],[0,1,0]]))} children [ Cylinder {{ radius {radius} height {width} }} ] }}
-            physics Physics {{ density -1 mass 0.3 }} }} }}''')
+            physics Physics {{ density -1 mass {physics.wheel_mass:g} }} }} }}''')
     lidar = mounts["lidar_link"]
     camera = mounts["camera_link"]
     children.append('Gyro { name "imu_gyro" xAxis FALSE yAxis FALSE zAxis TRUE }')
@@ -142,7 +145,7 @@ def generate_project(directory, model, config, port, token, executable=""):
           boundingObject Box {{ size {vector(size)} }} }}''')
     world = f'''#VRML_SIM R2025a utf8
 WorldInfo {{ basicTimeStep 20 coordinateSystem "ENU"
-  contactProperties [ {wheel_contact_properties('wheel', 'floor')} ] }}
+  contactProperties [ {wheel_contact_properties('wheel', 'floor', physics)} ] }}
 Viewpoint {{ orientation {vector(orientation)} position {vector(eye)} }}
 Background {{ skyColor [ 0.65 0.78 0.9 ] }}
 DirectionalLight {{ direction -0.3 0.4 -1 intensity 1 }}
@@ -153,15 +156,15 @@ DEF PYROBOT Robot {{ translation {config.spawn_pose[0]} {config.spawn_pose[1]} {
   controller "pyrobot_controller" controllerArgs [ "{port}" "{token}" ]
   children [ {' '.join(children)} ]
   boundingObject Pose {{ translation {vector(body_center)} children [ Box {{ size {vector(body_size)} }} ] }}
-  physics Physics {{ density -1 mass 8 centerOfMass [ {vector(body_center)} ] }} }}
+  physics Physics {{ density -1 mass {physics.body_mass:g} centerOfMass [ {vector(body_center)} ] }} }}
 '''
     path = worlds/"pyrobot.wbt"
     if config.webots_world:
         from core.simulation.external_world import compose
-        world=compose(config.webots_world,world,executable,config.webots_world_hash)
+        world=compose(config.webots_world,world,executable,config.webots_world_hash,physics)
         (Path(directory)/'SOURCE.txt').write_text(f'Source world: {config.webots_world}\nSHA256: {config.webots_world_hash}\nExisting top-level robots replaced. Relative assets reference the original project.\n',encoding='utf-8')
     path.write_text(world, encoding="utf-8")
     (controller/"robot.json").write_text(json.dumps({"radius": radius, "track": track,
         "joints": drive.left_joints+drive.right_joints, "mounts": mounts,
-        "config": config.model_dump()}), encoding="utf-8")
+        "config": config.model_dump(), "placement_preview": placement_preview}), encoding="utf-8")
     return path

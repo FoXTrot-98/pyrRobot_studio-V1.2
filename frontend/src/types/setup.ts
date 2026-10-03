@@ -11,6 +11,15 @@ export interface RobotConfiguration {
   webots_world_hash?: string;
   spawn_pose?: number[];
   spawn_height?: number;
+  physics: {
+    body_mass: number;
+    wheel_mass: number;
+    motor_max_torque: number;
+    motor_max_velocity: number;
+    wheel_damping: number;
+    wheel_friction: number;
+    wheel_slip: number;
+  };
   drive: {
     type: "four_wheel_differential";
     base_frame: string;

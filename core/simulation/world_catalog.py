@@ -19,6 +19,7 @@ class WorldRequest(BaseModel):
     resolution: float = Field(default=.15,ge=.02,le=2)
     reset_mission: bool = False
     source_hash: str = ""
+    placement_token: str = ""
 
 def executable(runtime):
     return next((n.node_obj.get_param('executable','') for n in runtime.graph.nodes.values() if n.plugin_id=='pyrobot.sim.webots'),'')

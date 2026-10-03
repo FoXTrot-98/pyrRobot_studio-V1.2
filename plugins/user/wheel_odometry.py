@@ -17,4 +17,4 @@ class EncoderOdometry(WorkerNode):
 
     def process(self, port, payload):
         pose = self.odometry.update(payload["ticks"], payload["wheel_radius"], payload["track"], payload["ticks_per_turn"], payload.get("gyro_yaw"))
-        self.emit("observation", {"odometry": pose.tolist(), "gyro_yaw": payload.get("gyro_yaw"), "scan": payload["scan"], "time": payload["time"]})
+        self.emit("observation", {"odometry": pose.tolist(), "gyro_yaw": self.odometry.relative_gyro(payload.get("gyro_yaw")), "scan": payload["scan"], "time": payload["time"]})

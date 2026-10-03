@@ -120,6 +120,21 @@ export function RobotSetupWizard({ projectName, positions, initialModel, onClose
           <label>Planning clearance (m)<input type="number" step=".01" min=".01" value={draft?.robot_config.mapping.inflation_radius}
             onChange={e => draft && update({robot_config:{...draft.robot_config,mapping:{...draft.robot_config.mapping,inflation_radius:Number(e.target.value)}}})} /></label>
           <small>Planning clearance must cover the robot clearance radius. Include your robot's body and wheels.</small>
+          {draft && <details><summary>Webots physics</summary>
+            <p>Saved with this robot and used in generated and imported worlds. Body mass excludes the four wheels. These approximate settings are not measured from the model; the built-in simulator does not use them.</p>
+            <div className="setup-two-columns">{([
+              ['body_mass', 'Body mass (kg)', .001],
+              ['wheel_mass', 'Mass per wheel (kg)', .001],
+              ['motor_max_torque', 'Maximum torque per motor (N·m)', .001],
+              ['motor_max_velocity', 'Maximum wheel speed (rad/s)', .001],
+              ['wheel_damping', 'Wheel joint damping (N·m·s/rad)', 0],
+              ['wheel_friction', 'Wheel friction coefficient', 0],
+              ['wheel_slip', 'Force-dependent slip (m/s/N)', 0],
+            ] as const).map(([key, label, minimum]) => <label key={key}>{label}<input type="number" min={minimum} step="any"
+              value={draft.robot_config.physics[key]} onChange={e => update({robot_config:{...draft.robot_config,
+                physics:{...draft.robot_config.physics,[key]:Number(e.target.value)}}})} /></label>)}</div>
+            <small>Collision shapes and inertia remain approximations. Recheck world placement after changing physics and save the project after applying.</small>
+          </details>}
         </>}
         {step === 2 && <><h3>Where are your sensors?</h3><p>Select the fixed mounting frames. Studio reads their positions and orientations from the URDF.</p>
           {selectFrame("360° lidar frame", "lidar_frame")}{selectFrame("Camera frame", "camera_frame")}

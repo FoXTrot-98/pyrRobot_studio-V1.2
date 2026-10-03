@@ -1,0 +1,4 @@
+[
+  {"name":"sample-generated-room"},
+  {"name":"sample-external-room-rotated","world":"tests/fixtures/external-room.wbt","spawn":[1,-1,1.5707963267948966]}
+]

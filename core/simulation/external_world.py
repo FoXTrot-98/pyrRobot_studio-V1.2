@@ -12,9 +12,13 @@ from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
 from core.simulation.webots_examples import webots_home
-from core.simulation.wheel_contact import WHEEL_FRICTION, WHEEL_FORCE_DEPENDENT_SLIP, wheel_contact_properties
+from core.simulation.wheel_contact import wheel_contact_properties
 
 TOKEN = re.compile(r'#[^\n]*|"(?:\\.|[^"\\])*"|[{}\[\]]|[^\s{}\[\]",]+')
+
+
+class WorldDependencyChangedError(ValueError):
+    """Configuration can be edited, but simulation must remain stopped."""
 
 def tokens(source):
     return [m for m in TOKEN.finditer(source) if not m.group().startswith('#')]
@@ -46,8 +50,53 @@ def read(path):
     if path.stat().st_size>8*1024*1024:raise ValueError('World/PROTO exceeds 8 MiB')
     return path,path.read_text(encoding='utf-8-sig')
 
-def inspect(path, executable=''):
+
+def url_tokens(source):
+    """Only strings belonging to URL fields, not names or controller arguments."""
+    ts = tokens(source)
+    for i, token in enumerate(ts[:-1]):
+        field = token.group()
+        if field != 'EXTERNPROTO' and field != 'url' and not field.endswith('Url'):
+            continue
+        j = i+1
+        if ts[j].group().startswith('"'):
+            yield ts[j]
+        elif ts[j].group() == '[':
+            j += 1
+            while j < len(ts) and ts[j].group().startswith('"'):
+                yield ts[j]
+                j += 1
+
+
+def local_dependencies(source, base, manifest):
+    """Hash explicit local URL dependencies recursively; never fetch remote URLs.
+
+    Retain paths in the digest so rebinding a URL also changes compatibility.
+    Remote/template-generated resources cannot be certified by this parser.
+    """
+    for token in url_tokens(source):
+        value = json.loads(token.group())
+        if not value or '://' in value:
+            continue
+        path = (base/value).resolve()
+        if not path.is_file():
+            raise ValueError(f'Missing local world asset: {value}')
+        if str(path) in manifest:
+            continue
+        if len(manifest) >= 4096:
+            raise ValueError('World has too many local asset dependencies')
+        digest = hashlib.sha256()
+        with path.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1024*1024), b''):
+                digest.update(chunk)
+        manifest[str(path)] = digest.hexdigest()
+        if path.suffix.lower() in ('.proto', '.wrl'):
+            _, text = read(path) if path.suffix.lower()=='.proto' else (path,path.read_text(encoding='utf-8-sig'))
+            local_dependencies(text, path.parent, manifest)
+
+def inspect(path, executable='', physics=None):
     path,source=read(path)
+    original_source = source
     if path.suffix.lower()!='.wbt' or not source.startswith('#VRML_SIM R2025'):
         raise ValueError('Use a Webots R2025 world; convert older worlds in Webots before importing')
     home=webots_home(executable)
@@ -113,8 +162,8 @@ def inspect(path, executable=''):
     info=infos[0]; body=without_comments(source[info[4]:info[5]])
     coordinate=re.search(r'\bcoordinateSystem\s+"([^"]+)"',body)
     if coordinate and coordinate.group(1)!='ENU':raise ValueError('Only ENU (Z-up) worlds are supported; convert the world in Webots first')
-    physics=re.search(r'\bphysics\s+"([^"]+)"',body)
-    if physics and physics.group(1) not in ('','<none>'):raise ValueError('World physics plugins are not supported')
+    physics_plugin=re.search(r'\bphysics\s+"([^"]+)"',body)
+    if physics_plugin and physics_plugin.group(1) not in ('','<none>'):raise ValueError('World physics plugins are not supported')
     body=re.sub(r'\bbasicTimeStep\s+[\d.]+','',body)
     edits.append((info[4],info[5],'\n basicTimeStep 20\n'+body))
     for start,end,name,kind in extern_edits:
@@ -126,17 +175,20 @@ def inspect(path, executable=''):
         value=json.loads(m.group())
         if not value or '://' in value:return m.group()
         candidate=(path.parent/value).resolve()
-        if candidate.is_file():return json.dumps(candidate.as_posix())
-        if Path(value).suffix.lower() in ('.proto','.obj','.stl','.dae','.png','.jpg','.jpeg','.hdr','.exr','.wrl'):
-            raise ValueError(f'Missing local world asset: {value}')
-        return m.group()
-    source=TOKEN.sub(lambda m: absolute(m) if m.group().startswith(chr(34)) else m.group(),source)
-    source=wheel_contacts(source, dependencies)
-    return {'path':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'removed_robots':removed,
+        if not candidate.is_file():raise ValueError(f'Missing local world asset: {value}')
+        return json.dumps(candidate.as_posix())
+    manifest = {str(path): hashlib.sha256(original_source.encode('utf-8')).hexdigest()}
+    local_dependencies(source, path.parent, manifest)
+    for token in reversed(list(url_tokens(source))):
+        source = source[:token.start()]+absolute(token)+source[token.end():]
+    source=wheel_contacts(source, dependencies, physics)
+    digest = hashlib.sha256(json.dumps(manifest,sort_keys=True).encode()).hexdigest()
+    return {'path':str(path),'sha256':digest,'removed_robots':removed,
+            'local_asset_hashes':manifest,
             'dependencies':dependencies,'source':source,
             'warnings':['Spawn floor height and clearance must be checked in Webots. Slopes, stairs and dynamic scenes are not qualified for this planar navigator.',
-                        'Remote Webots assets may need network/cache access. Local referenced assets must stay available.',
-                        f'Studio adds approximate skid-steer wheel contacts for default/floor and explicitly named materials (friction {WHEEL_FRICTION:g}, force-dependent slip {WHEEL_FORCE_DEPENDENT_SLIP:g}).']}
+                        'Explicit local URL assets are hash-checked. Remote, template-generated and mesh-internal dependencies are not content-locked; keep their versions fixed. Local referenced assets must stay available.',
+                        'Studio adds approximate skid-steer wheel contacts for default/floor and explicitly named materials using the robot physics settings.']}
 
 def available(executable=''):
     home=webots_home(executable)
@@ -146,7 +198,7 @@ def available(executable=''):
     paths.sort(key=lambda p:('samples/environments/' not in p.as_posix(),p.as_posix()))
     return [{'path':str(p),'name':p.relative_to(home/'projects').as_posix()} for p in paths]
 
-def wheel_contacts(source, dependencies=()):
+def wheel_contacts(source, dependencies=(), physics=None):
     """Add Studio's skid-steer approximation only for its own wheel material.
 
     A source world usually has no contact rule for our four-wheel chassis.
@@ -160,7 +212,7 @@ def wheel_contacts(source, dependencies=()):
         materials.update(re.findall(r'\b(?:contactMaterial|material1|material2)\s+"([^"\n]+)"', text))
     if material in materials:
         raise ValueError('World uses reserved contact material pyrobot_studio_wheel; rename it before importing')
-    pairs = '\n'.join(wheel_contact_properties(material, name) for name in sorted(materials))
+    pairs = '\n'.join(wheel_contact_properties(material, name, physics) for name in sorted(materials))
     info = next(b for b in blocks(source) if b[0]=='WorldInfo' and b[3])
     body = source[info[4]:info[5]]
     ts = tokens(body)
@@ -175,9 +227,9 @@ def wheel_contacts(source, dependencies=()):
     return source[:info[4]]+body+source[info[5]:]
 
 
-def compose(path,generated,executable='',expected_hash=''):
-    info=inspect(path,executable)
-    if expected_hash and info['sha256']!=expected_hash:raise ValueError('Source world changed. Check and apply it again in World setup')
+def compose(path,generated,executable='',expected_hash='',physics=None):
+    info=inspect(path,executable,physics)
+    if expected_hash and info['sha256']!=expected_hash:raise WorldDependencyChangedError('Source world or local dependency changed. Check and apply it again in World setup')
     robot=next(b for b in blocks(generated) if b[0]=='Robot' and b[3])
     body = generated[robot[1]:robot[2]].replace('contactMaterial "wheel"', 'contactMaterial "pyrobot_studio_wheel"')
     return info['source']+'\n'+body+'\n'

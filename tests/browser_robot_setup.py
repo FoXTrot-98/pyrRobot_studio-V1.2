@@ -53,6 +53,10 @@ def main():
                 dialog.get_by_role('button',name='Back',exact=True).click()
                 dialog.get_by_role('button',name='Back',exact=True).click()
                 dialog.get_by_label('Left rear wheel').select_option('rear_left_wheel_joint')
+                dialog.get_by_text('Webots physics',exact=True).click()
+                dialog.get_by_label('Body mass (kg)',exact=True).fill('9.5')
+                dialog.get_by_label('Maximum wheel speed (rad/s)',exact=True).fill('12')
+                page.screenshot(path=str(artifacts/'robot-physics-settings.png'))
                 dialog.get_by_role('button',name='Next',exact=True).click()
                 dialog.get_by_role('button',name='Next',exact=True).click()
                 if os.environ.get('PYROBOT_TEST_WORLD'):
@@ -65,12 +69,32 @@ def main():
                 dialog.wait_for(state='detached')
                 graph=page.request.get('http://127.0.0.1:8022/api/graph').json()
                 assert len(graph['nodes'])==7 and not graph['running']
+                physics=page.request.get('http://127.0.0.1:8022/api/project').json()['robot_config']['physics']
+                assert physics['body_mass']==9.5 and physics['motor_max_velocity']==12
                 assert page.get_by_label('Project name',exact=True).input_value()=='Wizard robot'
                 if os.environ.get('PYROBOT_TEST_WORLD'):
                     assert any(n['plugin_id']=='pyrobot.sim.webots' for n in graph['nodes'])
                     assert page.request.get('http://127.0.0.1:8022/api/project').json()['robot_config']['webots_world'].endswith('external-room.wbt')
+                    page.get_by_role('button',name='World setup',exact=True).click()
+                    world=page.get_by_role('dialog',name='World setup',exact=True)
+                    world.get_by_label('Spawn height (m)').fill('1')
+                    world.get_by_role('button',name='Check world',exact=True).click()
+                    world.get_by_text('Robot placement: invalid',exact=True).wait_for(timeout=90000)
+                    world.get_by_role('checkbox').check()
+                    assert world.get_by_role('button',name='Apply world',exact=True).is_disabled()
+                    page.screenshot(path=str(artifacts/'world-placement-invalid.png'))
+                    world.get_by_role('button',name='Find nearby safe position',exact=True).click()
+                    world.get_by_text('Inspect the suggested position in Webots, then use it and check again before applying.',exact=True).wait_for(timeout=90000)
+                    assert world.get_by_role('button',name='Apply world',exact=True).is_disabled()
+                    world.get_by_role('button',name='Use Webots position',exact=True).click(timeout=30000)
+                    assert abs(float(world.get_by_label('Spawn height (m)').input_value()))<.03
+                    world.get_by_role('button',name='Check world',exact=True).click()
+                    world.get_by_text('Robot placement: valid',exact=True).wait_for(timeout=90000)
+                    page.screenshot(path=str(artifacts/'world-placement-valid.png'))
+                    world.get_by_role('button',name='Apply world',exact=True).click()
+                    world.get_by_text('World and checked placement applied. Start Graph, then choose Explore when sensors are ready.',exact=True).wait_for(timeout=30000)
                     assert not errors,errors
-                    print('PASS: world-first top bar selection, robot setup preserves world and creates Webots graph',flush=True)
+                    print('PASS: world-first selection, robot setup, invalid placement, correction and checked apply',flush=True)
                     browser.close()
                     return
                 # Cancelling a draft does not change the existing robot config.
@@ -78,6 +102,9 @@ def main():
                 page.get_by_role('button',name='Robot setup',exact=True).click()
                 dialog.get_by_role('button',name='Next',exact=True).click()
                 dialog.get_by_label('Encoder ticks per revolution').fill('8192')
+                dialog.get_by_text('Webots physics',exact=True).click()
+                assert dialog.get_by_label('Body mass (kg)',exact=True).input_value()=='9.5'
+                dialog.get_by_label('Body mass (kg)',exact=True).fill('3')
                 dialog.get_by_role('button',name='Cancel',exact=True).click()
                 assert page.request.get('http://127.0.0.1:8022/api/project').json()==before
                 # New graph replacement requires an explicit review acknowledgement.

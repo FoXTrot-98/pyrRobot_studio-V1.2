@@ -28,8 +28,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', type=Path)
     parser.add_argument('--world', type=Path)
-    parser.add_argument('--spawn', type=float, nargs=3, default=[0.,0.,0.])
-    parser.add_argument('--explore-seconds', type=float, default=0)
+    parser.add_argument('--output', type=Path, help='Write this run report to a distinct JSON file')
+    parser.add_argument('--spawn', type=float, nargs=3)
+    parser.add_argument('--spawn-height', type=float)
+    parser.add_argument('--explore-seconds', type=float, default=0, help='Simulation seconds before requesting return home')
     parser.add_argument('--finish-exploration', action='store_true',
                         help='Wait for exploration to choose return home itself (no operator return command).')
     parser.add_argument('--sensor-only', action='store_true')
@@ -52,11 +54,13 @@ def main():
         info=inspect(args.world)
         doc.robot_config.webots_world=info['path']
         doc.robot_config.webots_world_hash=info['sha256']
-        doc.robot_config.spawn_pose=args.spawn
         doc.robot_config.mapping.origin=[-15,-15]
         doc.robot_config.mapping.width=200
         doc.robot_config.mapping.height=200
         doc.robot_config.mapping.resolution=.15
+    if args.spawn is not None:doc.robot_config.spawn_pose=args.spawn
+    if args.spawn_height is not None:doc.robot_config.spawn_height=args.spawn_height
+    doc=ProjectDocument.model_validate(doc.model_dump())
     for node in doc.nodes:
         if node.node_id == "sim": node.params["minimize"] = True
         if node.node_id == "nav":
@@ -86,7 +90,8 @@ def main():
                 if failed: raise AssertionError(failed)
                 if args.explore_seconds or args.finish_exploration:
                     if navigation_failures or time.monotonic()>deadline:
-                        output = ROOT/'artifacts'/'webots-exploration-failure.json'
+                        output = args.output.with_suffix('.failure.json') if args.output else ROOT/'artifacts'/'webots-exploration-failure.json'
+                        output.parent.mkdir(parents=True,exist_ok=True)
                         output.write_text(json.dumps(dict(report=received.get('node/nav/out/path'),
                             state=received.get('node/slam/out/state'), truth=received.get('node/sim/out/truth'),
                             failures=navigation_failures),indent=2),encoding='utf-8')
@@ -97,12 +102,16 @@ def main():
         truth = received["node/sim/out/truth"]
         scan = received["node/sim/out/sensors"]["scan"]
         print("Initial pose:", truth["pose"], "lidar rear/front:", scan["ranges"][0], scan["ranges"][180], flush=True)
-        if args.world:
+        if doc.robot_config.webots_world:
             assert truth['obstacles']==[]
             assert any(scan['hits']), 'External geometry was not sensed'
             pose=received['node/slam/out/state']['pose']
-            assert math.dist(pose[:2],args.spawn[:2])<.2, pose
+            assert math.dist(pose[:2],doc.robot_config.spawn_pose[:2])<.2, pose
             if args.sensor_only:
+                # Exercise settling and sustained sensor delivery, not only the
+                # first frame (which can precede spawn validation failures).
+                first_time = truth['time']
+                wait(lambda: received.get('node/sim/out/truth', {}).get('time', 0) >= first_time+3, 30)
                 runtime.graph.stop();handle.close()
                 assert simulator._process.poll() is not None
                 print('PASS external world sensor data, spawn frame and process cleanup',flush=True)
@@ -115,8 +124,8 @@ def main():
             if args.finish_exploration:
                 wait(lambda: received.get('node/nav/out/path',{}).get('status')=='home_reached',120)
             else:
-                deadline=time.monotonic()+args.explore_seconds
-                wait(lambda: time.monotonic()>=deadline,args.explore_seconds+5)
+                end_time=truth['time']+args.explore_seconds
+                wait(lambda: received['node/sim/out/truth']['time']>=end_time,max(90,args.explore_seconds*10))
             truth=received['node/sim/out/truth']
             assert exploration_travel[0]>.3, 'Exploration did not move'
             assert truth['collisions']==0
@@ -131,12 +140,17 @@ def main():
             assert not navigation_failures, navigation_failures
             heading_error=(truth['pose'][2]-home[2]+math.pi)%(2*math.pi)-math.pi
             assert abs(heading_error)<.2, truth
-            result=dict(world=str(args.world),project=str(args.project),planner=args.planner,
+            result=dict(world=doc.robot_config.webots_world or 'generated-room',project=str(args.project),planner=args.planner,
+                world_hash=doc.robot_config.webots_world_hash,spawn=doc.robot_config.spawn_pose,
+                spawn_height=doc.robot_config.spawn_height,physics=doc.robot_config.physics.model_dump(),
+                explore_seconds=args.explore_seconds,
                 controller=args.controller,automatic_return=args.finish_exploration,
                 max_displacement=exploration_travel[0],home=home,pose=truth['pose'],
                 home_error=math.dist(truth['pose'][:2],home[:2]),heading_error=heading_error,
                 collisions=truth['collisions'],report=received['node/nav/out/path'])
-            (ROOT/'artifacts'/'webots-exploration.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
+            output=args.output or ROOT/'artifacts'/'webots-exploration.json'
+            output.parent.mkdir(parents=True,exist_ok=True)
+            output.write_text(json.dumps(result,indent=2),encoding='utf-8')
             runtime.graph.stop();handle.close()
             assert simulator._process.poll() is not None
             print('PASS imported-world exploration and return home:',truth['pose'],flush=True)
@@ -152,17 +166,24 @@ def main():
         time.sleep(1.)
         stopped = received["node/sim/out/truth"]["pose"][:]
         print("After keyboard drive:", stopped, flush=True)
-        assert stopped[0] > start[0]+.15, "Positive motor commands did not drive forward"
+        forward = ((stopped[0]-start[0])*math.cos(start[2])+
+                   (stopped[1]-start[1])*math.sin(start[2]))
+        assert forward > .15, "Positive motor commands did not drive forward"
         time.sleep(.5)
         assert math.dist(stopped[:2],received["node/sim/out/truth"]["pose"][:2]) < .03
-        runtime.graph.update_node_params("nav", {"waypoints":[[.8,0],[.8,1]],"enabled":True})
+        # The same route relative to the spawn, including rotated/translated worlds.
+        sx,sy,yaw=doc.robot_config.spawn_pose
+        waypoints=[[sx+x*math.cos(yaw)-y*math.sin(yaw),
+                    sy+x*math.sin(yaw)+y*math.cos(yaw)] for x,y in ((.8,0),(.8,1))]
+        runtime.graph.update_node_params("nav", {"waypoints":waypoints,"enabled":True})
         runtime.graph.update_node_params("drive", {"mode":"autonomous"})
         wait(lambda: received.get("node/nav/out/path",{}).get("status")=="mission_complete", 90)
         report = received["node/nav/out/path"]
         assert report["planner"] == args.planner and report["controller"] == args.controller
         truth = received["node/sim/out/truth"]
         print("Final pose:", truth["pose"], "contacts:", truth["collisions"], flush=True)
-        assert math.dist(truth["pose"][:2],[.8,1]) < .4
+        waypoint_error=math.dist(truth["pose"][:2],waypoints[-1])
+        assert waypoint_error < .4
         assert truth["collisions"] == 0
         if args.return_home:
             home = received['node/nav/out/path']['home_pose']
@@ -174,11 +195,22 @@ def main():
             assert abs(error)<.2
             assert truth['collisions']==0
             print('PASS return home:',truth['pose'],'home:',home,flush=True)
+        estimate=received['node/slam/out/state']['pose']
         result = dict(planner=args.planner, controller=args.controller,
+                      world=doc.robot_config.webots_world or 'generated-room',
+                      world_hash=doc.robot_config.webots_world_hash,
+                      physics=doc.robot_config.physics.model_dump(),spawn=doc.robot_config.spawn_pose,
+                      forward_distance=forward,waypoints=waypoints,waypoint_error=waypoint_error,
+                      estimated_pose=estimate,
+                      localization_position_error=math.dist(estimate[:2],truth['pose'][:2]),
+                      localization_heading_error=(estimate[2]-truth['pose'][2]+math.pi)%(2*math.pi)-math.pi,
+                      home_error=math.dist(truth['pose'][:2],home[:2]) if args.return_home else None,
+                      home_heading_error=error if args.return_home else None,
                       project=str(args.project or "examples/four-wheel/webots.pyrobot.json"),
                       return_home=args.return_home, pose=truth['pose'], collisions=truth['collisions'],
                       status=received['node/nav/out/path']['status'])
-        output = ROOT/'artifacts'/f'webots-{args.planner}-{args.controller}.json'
+        output = args.output or ROOT/'artifacts'/f'webots-{args.planner}-{args.controller}.json'
+        output.parent.mkdir(parents=True,exist_ok=True)
         output.write_text(json.dumps(result,indent=2),encoding='utf-8')
         runtime.graph.stop()
         handle.close()

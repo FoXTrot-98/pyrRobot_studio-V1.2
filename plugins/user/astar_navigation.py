@@ -236,13 +236,18 @@ class AStarNavigation(WorkerNode):
             self._reset_recovery()
         elif status in ("no_path", "obstacle_stop"):
             linear = angular = 0.0
+            # Waiting with zero command is not failed drive progress. Pause
+            # that budget, but retain prior unproductive driving time so
+            # alternating blocked/clear observations cannot reset it forever.
             if self._blocked_since is None:
                 self._blocked_since = wall_now
             if wall_now - self._blocked_since >= self.get_param("blocked_timeout", 8.):
                 self._failure = ("navigation_failed", route_reason or "An obstacle remained too close. Clear the obstruction or choose another goal, then retry.")
         else:
+            if self._blocked_since is not None and self._progress_since is not None:
+                self._progress_since += wall_now-self._blocked_since
             self._blocked_since = None
-        if not self._failure and status not in ("paused", "goal_reached", "mission_complete", "home_reached"):
+        if not self._failure and status not in ("paused", "goal_reached", "mission_complete", "home_reached", "no_path", "obstacle_stop"):
             turn_progress = (self._progress_pose is not None and abs(angular) > .05
                              and abs(wrap(pose[2]-self._progress_pose[2])) >= .15)
             if self._progress_pose is None or math.dist(pose[:2], self._progress_pose[:2]) >= .08 or turn_progress:

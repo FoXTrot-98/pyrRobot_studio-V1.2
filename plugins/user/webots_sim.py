@@ -42,10 +42,10 @@ class WebotsSimulation(Node):
         if not find_webots(self.get_param("executable", "")):
             raise ValueError("Webots not found. Install Webots R2025a or set the executable parameter / WEBOTS_EXECUTABLE.")
         if self.robot_config.webots_world:
-            from core.simulation.external_world import inspect
+            from core.simulation.external_world import inspect, WorldDependencyChangedError
             info=inspect(self.robot_config.webots_world,self.get_param('executable',''))
             if info['sha256']!=self.robot_config.webots_world_hash:
-                raise ValueError('Source world changed. Check and apply it again in World setup')
+                raise WorldDependencyChangedError('Source world or local dependency changed. Check and apply it again in World setup')
             return
         if collision(np.asarray(self.robot_config.spawn_pose), self.robot_config.drive.collision_radius, self.robot_config.environment.boxes()):
             raise ValueError("Starting position collides with the configured environment")
@@ -60,15 +60,32 @@ class WebotsSimulation(Node):
         self._server.settimeout(.2)
         token = uuid.uuid4().hex
         self.directory = ROOT/"artifacts/webots"/token
-        world = generate_project(self.directory, self.robot_model, self.robot_config, self._server.getsockname()[1], token, self.get_param('executable',''))
+        world = generate_project(self.directory, self.robot_model, self.robot_config, self._server.getsockname()[1], token, self.get_param('executable',''), getattr(self, 'placement_preview', False))
         self._log_file = (self.directory/"webots.log").open("w", encoding="utf-8")
         command = [find_webots(self.get_param("executable", "")), "--batch", "--mode=realtime", "--stdout", "--stderr"]
         if self.get_param("minimize", False): command.append("--minimize")
         command.append(str(world))
         self._process = subprocess.Popen(command, stdout=self._log_file, stderr=self._log_file,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+        self._diagnostic('starting')
         self._thread = threading.Thread(target=self._run, args=(token,), name=self.node_id, daemon=True)
         self._thread.start()
+
+    def _diagnostic(self, stage, error=None):
+        """Persist failures even when graph shutdown closes the Webots window."""
+        data = dict(stage=stage, world=self.robot_config.webots_world or 'Generated room',
+                    spawn_pose=self.robot_config.spawn_pose, spawn_height=self.robot_config.spawn_height,
+                    error=error, log=str(self.directory/'webots.log'))
+        data['placement'] = getattr(self, 'placement_result', None)
+        try:
+            (self.directory/'status.json').write_text(json.dumps(data, indent=2), encoding='utf-8')
+            # Windows GUI builds may not forward controller stderr to the
+            # redirected Webots log. Record the received error here as well.
+            if error and self._log_file and not self._log_file.closed:
+                self._log_file.write(f'\nPyRobot run failed: {error}\n')
+                self._log_file.flush()
+        except (OSError, ValueError):
+            self.log.exception('Could not write Webots run diagnostic')
 
     def on_message(self, port, message):
         if message.payload["frame"] != self.robot_config.drive.base_frame:
@@ -88,12 +105,17 @@ class WebotsSimulation(Node):
                     if self._process.poll() is not None or time.monotonic() > deadline:
                         raise RuntimeError(f"Webots did not connect; see {self.directory / 'webots.log'}")
             if self._stop.is_set(): return
-            self._connection.settimeout(5.)
+            # A visual placement preview may be paused while editing translation
+            # in Webots. Its owner closes the socket on cancellation/expiry.
+            self._connection.settimeout(None if getattr(self, 'placement_preview', False) else 5.)
             stream = self._connection.makefile("rwb")
             if json.loads(stream.readline(4096)).get("token") != token:
                 raise ValueError("Unexpected Webots controller token")
+            self._diagnostic('connected')
             drive = self.robot_config.drive
             last_time = -1.
+            startup_ready = False
+            startup_status = None
             while not self._stop.is_set():
                 raw = stream.readline(2*1024*1024)
                 if not raw or not raw.endswith(b"\n"):
@@ -101,6 +123,24 @@ class WebotsSimulation(Node):
                 packet = json.loads(raw)
                 if packet.get('error'):
                     raise RuntimeError(packet['error'])
+                if 'startup' in packet:
+                    self.placement_result = packet['startup']
+                    self.placement_updated = time.monotonic()
+                    startup_ready = packet['startup']['status'] == 'valid'
+                    if startup_status != packet['startup']['status']:
+                        startup_status = packet['startup']['status']
+                        self._diagnostic('placement_'+startup_status)
+                    with self._command_lock:
+                        self._command = (0., 0., 0.)
+                        action=getattr(self,'placement_action',None)
+                        self.placement_action=None
+                    reply={'linear':0,'angular':0}
+                    if getattr(self,'placement_preview',False) and action:
+                        reply['placement_action']=action
+                    stream.write((json.dumps(reply)+'\n').encode()); stream.flush()
+                    continue
+                if not startup_ready or getattr(self, 'placement_preview', False):
+                    raise ValueError('Webots sent sensor data before startup validation')
                 now = packet["time"]
                 if now <= last_time:
                     raise ValueError("Webots simulation clock reset; stop and restart the Studio graph")
@@ -127,7 +167,10 @@ class WebotsSimulation(Node):
                         self.emit("camera", {"width": 240, "height": 144, "jpeg_base64": base64.b64encode(encoded).decode(),
                             "time": now, "frame": drive.camera_frame, "source": "webots"}, **metadata)
         except Exception as exc:
-            if not self._stop.is_set(): self.fail(exc)
+            if not self._stop.is_set():
+                self._diagnostic('failed', str(exc))
+                self.log.exception('Webots run failed; diagnostic: %s', self.directory/'status.json')
+                self.fail(RuntimeError(f'{exc} Diagnostic: {self.directory / "status.json"}'))
 
     def on_stop(self):
         self._stop.set()
@@ -146,3 +189,5 @@ class WebotsSimulation(Node):
                     self._process.terminate()
                 self._process.wait(timeout=3)
         if self._log_file: self._log_file.close()
+        if hasattr(self, 'directory') and self.state != 'failed':
+            self._diagnostic('stopped')

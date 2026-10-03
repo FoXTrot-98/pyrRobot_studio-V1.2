@@ -41,6 +41,8 @@ from core.runtime.graph import GraphError
 from core.runtime.project import ProjectDocument, Position
 from core.simulation.config import RobotConfiguration
 from core.simulation.world_catalog import WorldRequest, catalog as world_catalog, draft as world_draft
+from core.simulation.world_catalog import executable as world_executable
+from core.simulation.placement_preview import PlacementPreview
 from core.runtime.project import prepare_project
 from core.runtime.robot_setup import SetupRequest, inspect_robot, draft_project, revision, EXAMPLE
 from core.simulation.webots_examples import PROFILES, example_project
@@ -72,6 +74,14 @@ async def lifespan(app):
 app = FastAPI(title="PyRobot Studio Backend", lifespan=lifespan)
 runtime = Runtime()
 plugin_builder = Builder()
+placement_preview = None
+
+
+def close_placement():
+    global placement_preview
+    if placement_preview:
+        placement_preview.close()
+        placement_preview = None
 
 def serialized(fn):
     @wraps(fn)
@@ -102,6 +112,7 @@ def startup() -> None:
 
 
 def shutdown():
+    close_placement()
     plugin_builder.close()
     runtime.close()
 
@@ -393,8 +404,59 @@ def apply_world(request:WorldRequest):
     try:
         if not request.reset_mission or not request.source_hash:raise ValueError('Check the world and acknowledge resetting saved maps and missions first')
         document,_=checked_world(request)
+        if document.nodes:
+            if not placement_preview:
+                raise ValueError('Check robot placement in Webots before applying this world')
+            placement_preview.require_valid(request)
+        close_placement()
         return runtime.load_project(document)
     except (ValueError,GraphError,OSError,KeyError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@app.post('/api/simulation/worlds/placement')
+@serialized
+def start_placement(request: WorldRequest):
+    global placement_preview
+    try:
+        document, info = checked_world(request)
+        if not document.nodes or not document.robot_urdf:
+            raise ValueError('Configure a supported robot in Robot setup first')
+        if request.source_hash != info['sha256']:
+            raise ValueError('Check world compatibility before checking placement')
+        close_placement()
+        placement_preview = PlacementPreview(document, request, runtime.bus, world_executable(runtime))
+        return placement_preview.status()
+    except (ValueError, GraphError, OSError, KeyError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get('/api/simulation/worlds/placement/{token}')
+@serialized
+def placement_status(token: str):
+    if not placement_preview or placement_preview.token != token:
+        raise HTTPException(404, 'Placement preview no longer exists')
+    return placement_preview.status()
+
+
+@app.delete('/api/simulation/worlds/placement/{token}')
+@serialized
+def stop_placement(token: str):
+    if placement_preview and placement_preview.token == token:
+        close_placement()
+    return {'closed': True}
+
+
+@app.post('/api/simulation/worlds/placement/{token}/{action}')
+@serialized
+def placement_action(token: str, action: str):
+    if not placement_preview or placement_preview.token != token:
+        raise HTTPException(404, 'Placement preview no longer exists')
+    if action not in ('search','cancel'):
+        raise HTTPException(400, 'Unknown placement action')
+    try:
+        return placement_preview.action(action)
+    except ValueError as exc:
         raise HTTPException(400,str(exc)) from exc
 
 
@@ -444,6 +506,7 @@ def connect(req: ConnectRequest):
 @serialized
 def start_graph():
     try:
+        close_placement()
         runtime.graph.start()
     except GraphError as exc:
         raise HTTPException(400, str(exc)) from exc

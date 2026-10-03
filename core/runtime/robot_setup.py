@@ -17,6 +17,7 @@ from core.simulation.world import robot_dimensions
 from .project import ProjectDocument, Position, export_project, prepare_project
 from .graph import GraphError
 from core.urdf.assets import Assets, attach_assets
+from core.simulation.external_world import WorldDependencyChangedError
 
 EXAMPLE = Path(__file__).resolve().parents[2]/'examples/four-wheel'
 
@@ -131,6 +132,14 @@ def inspect_robot(xml, assets=None):
         candidates = [name for name in model.links if any(term in name.lower() for term in terms) and 'optical' not in name.lower()]
         preferred = role+'_link'
         drive[role+'_frame'] = preferred if preferred in candidates else candidates[0] if len(candidates)==1 else ''
+    try:
+        from core.simulation.mesh_robot import required_clearance
+        minimum = math.ceil(required_clearance(model, RobotConfiguration.model_validate(config))*1000)/1000
+        drive['collision_radius'] = max(drive['collision_radius'], minimum)
+        config['mapping']['inflation_radius'] = max(config['mapping']['inflation_radius'], drive['collision_radius'])
+    except ValueError:
+        # Incomplete wheel/frame selections are completed in the setup wizard.
+        pass
     return {'name':model.name,'root':root,'links':links,
             'joints':[{'name':j.name,'type':j.joint_type,'parent':j.parent,'child':j.child} for j in model.joints.values()],
             'suggested_config':config,'warnings':warnings}
@@ -167,7 +176,15 @@ def draft_project(runtime, request):
     try:
         # Configuration errors are blockers; unfinished wiring is allowed when
         # retaining an existing graph, and is reported as a review warning.
-        for instance in candidate.nodes.values(): instance.node_obj.validate_configuration()
+        for instance in candidate.nodes.values():
+            try:
+                instance.node_obj.validate_configuration()
+            except WorldDependencyChangedError:
+                # Allow repairing robot geometry in an existing stopped graph.
+                # Preflight still reports the stale world; Start stays blocked
+                # until a new physical world check is applied.
+                if request.target != 'configure':
+                    raise
         diagnostics = candidate.preflight()
         if request.target != 'configure' and diagnostics:
             raise GraphError('; '.join(item['message'] for item in diagnostics))

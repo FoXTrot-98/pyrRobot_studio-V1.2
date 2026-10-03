@@ -48,11 +48,16 @@ export interface MapInfo {
   can_capture: boolean;
 }
 
-export interface WorldChoice { path:string; revision:string; spawn_pose:number[]; spawn_height:number; bounds:number[]; resolution:number; reset_mission:boolean; source_hash?:string }
+export interface WorldChoice { path:string; revision:string; spawn_pose:number[]; spawn_height:number; bounds:number[]; resolution:number; reset_mission:boolean; source_hash?:string; placement_token?:string }
+export interface PlacementStatus { token:string; status:'starting'|'checking'|'valid'|'invalid'|'failed'; reasons:string[]; observed_position?:number[]; observed_yaw?:number; can_use_observed?:boolean; search?:{status:'idle'|'searching'|'found'|'cancelled'|'exhausted';attempt:number;total:number} }
 export interface WorldPreview { path:string; sha256:string; removed_robots:string[]; warnings:string[] }
 export interface WorldCatalog { worlds:{path:string;name:string}[]; error:string|null; revision:string; configuration:import('../types/setup').RobotConfiguration; bounds:number[]; empty:boolean }
 export const api = {
   simulationWorlds: () => request<WorldCatalog>('/api/simulation/worlds'),
+  startPlacement: (choice:WorldChoice) => request<PlacementStatus>('/api/simulation/worlds/placement',{method:'POST',body:JSON.stringify(choice)}),
+  placementStatus: (token:string) => request<PlacementStatus>(`/api/simulation/worlds/placement/${encodeURIComponent(token)}`),
+  placementAction: (token:string,action:'search'|'cancel') => request<PlacementStatus>(`/api/simulation/worlds/placement/${encodeURIComponent(token)}/${action}`,{method:'POST'}),
+  stopPlacement: (token:string) => request<unknown>(`/api/simulation/worlds/placement/${encodeURIComponent(token)}`,{method:'DELETE'}),
   previewWorld: (choice:WorldChoice) => request<WorldPreview>('/api/simulation/worlds/preview',{method:'POST',body:JSON.stringify(choice)}),
   applyWorld: (choice:WorldChoice) => request<unknown>('/api/simulation/worlds/apply',{method:'POST',body:JSON.stringify(choice)}),
   getMap: (nodeId: string) => request<MapInfo>(`/api/project/maps/${encodeURIComponent(nodeId)}`),

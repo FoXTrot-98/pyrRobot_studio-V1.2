@@ -19,6 +19,11 @@ desktop release or a hardware-qualified control system.
 
 ## Install from a clean checkout
 
+**New to Studio?** Start with the [visual getting-started PDF](docs/getting-started/PyRobot-Studio-Getting-Started.pdf).
+Its 11 illustrated pages cover your own robot, world placement, first drive,
+navigation and saving. An [offline HTML edition](docs/getting-started/index.html)
+is also included.
+
 Use 64-bit Python **3.14.6**, Node.js **24.18.0**, npm and Git. Version files
 and CI use these versions. Windows is the locally verified platform; Linux has
 a CI job but must be verified by a successful run. ARM is not qualified.
@@ -73,7 +78,11 @@ Stop the graph before closing the terminals with Ctrl+C.
   Robot setup without manually copying mesh files.
 - **World setup** in the top bar selects an installed or local Webots world,
   spawn pose and mapping bounds, before or after robot setup. Supported worlds
-  are inspected before application; the installed catalog is not a compatibility list.
+  are inspected before application. With a robot configured, a motor-disabled
+  Webots preview validates physical placement and sensor readiness before Apply.
+  A cancellable nearby-position search can suggest a physically supported spawn;
+  you inspect, adopt and recheck it before applying.
+  The installed catalog is not a compatibility list.
 - A* and Dijkstra planning, proportional and fuzzy path following, frontier
   exploration, return home, and mission pause/cancel controls. Exploration in
   arbitrary unknown environments is not yet qualified.
@@ -91,7 +100,9 @@ Stop the graph before closing the terminals with Ctrl+C.
    clears saved maps and resets mission settings.
 3. Open **Robot setup**, load the robot, assign its four wheels and level lidar/camera
    frames, and check the configuration. Use the Webots target for external worlds.
-4. Start the graph in Stop mode. Inspect the spawn and clearance in Webots before
+4. With the robot configured, reopen **World setup** and **Check world**. Inspect
+   the actual world in Webots and correct the numeric placement until valid.
+   Apply, then start the graph in Stop mode. Startup repeats placement and sensor checks before
    choosing manual driving or an autonomous mission. Save the project to retain
    the robot and world settings.
 
@@ -103,6 +114,44 @@ on the backend computer: project JSON does not bundle them. See
 [World setup](docs/SIMULATION_WORLDS.md) for supported structures and restrictions.
 
 ## Latest verification
+
+The validation and nearby-placement milestone on **2026-10-03** passed all **32 regression scripts**,
+with the documented Windows serial-test skip, plus the focused old-project
+migration regression and licensing checks. Live Webots checks passed sample-robot
+manual driving, two waypoints and return home with zero contacts; car1 passed
+invalid-placement rejection, settled-pose adoption, apply and sensor startup in
+`complete_apartment.wbt`. Starting at the failing origin in that world, the nearby
+search found a supported car1 position on attempt four; a fresh placement check,
+apply and sensor startup passed. The browser workflow passed search, adoption,
+rechecking and apply. Frontend build passed; lint reported three existing warnings.
+These are bounded checks, not arbitrary-world or hardware
+qualification. A clean installation was not repeated for this milestone.
+
+The configurable-physics follow-up also passed all 32 regression scripts, the
+frontend build, licensing checks and browser apply/persistence/cancel checks.
+Live Webots placement, nearby search, adoption and rechecking passed in the
+external-room fixture with a 9.5 kg body and 12 rad/s motor limit. This verifies
+configuration and placement, not calibrated dynamics or navigation accuracy.
+
+The subsequent two-world route check passed manual driving, two spawn-relative
+waypoints and return home with zero reported contacts in both worlds. Physical
+home error was 0.152 m in the generated room and 0.081 m in the imported-room
+fixture starting at `(1, -1, pi/2)`. These are single-run measurements, not
+repeatability bounds. Run `tests/webots_matrix.py` to reproduce the cases and
+retain individual logs and measurements; see [world validation](docs/SIMULATION_WORLDS.md#reproduce-checks).
+
+Car1 then passed two 12-simulation-second exploration/return checks in each of
+the external-room fixture and installed `complete_apartment.wbt` (four runs,
+zero reported contacts). Physical home errors were 0.087–0.116 m and
+0.149–0.188 m respectively. These short runs use an explicit return request;
+they do not establish complete apartment coverage or blocked-route recovery.
+
+The obstruction-recovery follow-up fixed a false `stalled` result while waiting
+with zero commanded motion. The progress timer now pauses during blockage while
+retaining previous unproductive driving time. All 33 regression scripts passed;
+the final timer change also passed 12 focused recovery tests plus exploration
+and mission-management checks. These use deterministic obstacle/map inputs;
+live moving-obstacle recovery in Webots remains unqualified.
 
 The local Windows review of **V1.3.3 (`8deecc8`)**, on **2026-10-01**, passed:
 
@@ -141,15 +190,26 @@ revision have not been established by this review.
 
 ## Known issues and next priorities
 
-The following issues were identified in the V1.3.3 review and remain open:
+The validation follow-up adds geometry-based clearance checks, an eight-second
+startup settling deadline, and first-sample encoder/gyro baselines. The sample
+robot's clearance default is now 0.55 m. Older projects with smaller clearance
+values must be corrected in Robot setup; the error reports the required minimum.
+Use **Update robot in current graph** to apply a clearance correction even when
+the world hash is stale. The warning remains and graph startup stays blocked
+until the subsequent World setup check is applied.
 
-- **World dependency validation:** the compatibility hash covers the `.wbt` file,
-  not referenced PROTO or geometry contents. A dependency change can therefore
-  leave an old saved map apparently compatible. Reapply the world and rebuild
-  its map after changing dependencies.
-- **Asset parsing:** the importer treats arbitrary quoted strings as possible
-  asset paths. For example, a node named `wall.png` can be rejected as a missing
-  image even though its name is valid. Asset resolution needs field-aware parsing.
+World compatibility now includes explicit local URL dependency contents, including
+nested local PROTOs and their directly referenced meshes/textures. Old world hashes
+must be refreshed with **World setup → Check world → Apply world**; this resets
+saved maps and missions. Asset resolution examines URL fields, so ordinary names
+such as `wall.png` are preserved.
+
+Remaining limitations:
+
+- **World dependency validation:** remote assets, template-generated paths,
+  custom PROTO parameter indirection and mesh-internal references are not fully
+  content-locked. Keep these dependencies fixed and reapply/rebuild maps after
+  changing them. This is not a complete Webots asset packager.
 - **Returning to built-in simulation:** Robot setup retains the selected external
   world when choosing the built-in target, which then rejects it. Open a built-in
   example project as a workaround until explicit world clearing is implemented.
@@ -191,11 +251,15 @@ work. Installed plugins execute in the runtime process; draft subprocess tests
 are not a security sandbox. Hardware transports are not verified actuator drivers.
 
 Simulation uses approximate body-box and cylindrical-wheel collisions. Webots
-generation currently fixes body mass at 8 kg, wheel mass at 0.3 kg, motor torque
-at 8 N m, and uses fixed sensor settings and approximate wheel friction/slip.
+physics can be configured in **Robot setup → Drive → Webots physics**: body mass,
+mass per wheel, motor torque/speed limits, joint damping, friction and slip.
+Old projects retain defaults of 8 kg body mass, 0.3 kg per wheel and 8 N m torque.
+Sensor settings remain fixed; inertia and wheel contact behavior are approximate.
 These are simulation assumptions, not measured properties of an imported robot.
 Generated and imported Webots worlds share their wheel friction/slip defaults in
 `core/simulation/wheel_contact.py` to prevent inconsistent tuning.
+The saved physics settings apply to both kinds of world; the built-in geometric
+simulator does not model these forces. See [physics settings](docs/SIMULATION_WORLDS.md#robot-physics).
 
 Webots automatically supplies a gyro without configured noise or bias. When gyro
 measurements are present, SLAM uses their integrated heading and corrects only

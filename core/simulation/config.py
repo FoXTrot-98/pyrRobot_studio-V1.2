@@ -4,10 +4,22 @@
 """Portable reference-simulator configuration stored in the project document."""
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from .wheel_contact import WHEEL_FRICTION, WHEEL_FORCE_DEPENDENT_SLIP
 
 
 class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+
+class PhysicsSettings(Settings):
+    """Explicit Webots approximation; masses exclude/include wheels as named."""
+    body_mass: float = Field(default=8, gt=0)
+    wheel_mass: float = Field(default=.3, gt=0)
+    motor_max_torque: float = Field(default=8, gt=0)
+    motor_max_velocity: float = Field(default=20, gt=0)
+    wheel_damping: float = Field(default=.02, ge=0)
+    wheel_friction: float = Field(default=WHEEL_FRICTION, ge=0)
+    wheel_slip: float = Field(default=WHEEL_FORCE_DEPENDENT_SLIP, ge=0)
 
 
 class DriveSettings(Settings):
@@ -18,7 +30,7 @@ class DriveSettings(Settings):
     lidar_frame: str = "lidar_link"
     camera_frame: str = "camera_link"
     wheel_radius: float | None = Field(default=None, gt=0)
-    collision_radius: float = Field(default=.48, gt=0, le=5)
+    collision_radius: float = Field(default=.55, gt=0, le=5)
     ticks_per_turn: int = Field(default=4096, gt=0)
 
     @model_validator(mode="after")
@@ -63,6 +75,7 @@ class RobotConfiguration(Settings):
     spawn_pose: Annotated[list[float], Field(min_length=3, max_length=3)] = [0., 0., 0.]
     spawn_height: float = Field(default=.002, ge=-100, le=100)
     drive: DriveSettings = Field(default_factory=DriveSettings)
+    physics: PhysicsSettings = Field(default_factory=PhysicsSettings)
     environment: EnvironmentSettings = Field(default_factory=EnvironmentSettings)
     mapping: MapSettings = Field(default_factory=MapSettings)
 

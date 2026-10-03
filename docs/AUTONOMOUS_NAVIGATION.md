@@ -17,14 +17,18 @@ four-wheel pipeline. Existing saved projects receive the new parameter defaults.
 | Fresh data after a timeout | Replan before moving; an existing navigation failure remains latched |
 | No route or close front obstacle | Stop linear and angular motion; replan at most once per second of observation time |
 | Continuously blocked for `blocked_timeout` (default 8 seconds) | Publish zero velocity and `navigation_failed` |
-| Less than 8 cm translation within `progress_timeout` (default 12 seconds) | Publish zero velocity and `stalled` |
+| No 8 cm translation or 0.15 rad commanded turn progress within `progress_timeout` (default 12 seconds of unblocked operation) | Publish zero velocity and `stalled` |
 | New goal/waypoints or explicit retry | Clear old commands immediately; wait for a fresh observation before moving |
 | Paused or goal completed | Stop; reset the progress budget |
 
-Failure budgets use monotonic wall time, not simulation time. The progress check
-allows turns within its timeout but does not regard spinning in place as route
-progress. Small pose noise below 8 cm does not reset the budget. Short alternating
-blocked/clear intervals still count toward the no-progress timeout.
+Failure budgets use monotonic wall time, not simulation time. A commanded turn
+counts as progress after 0.15 rad; small translation noise below 8 cm does not
+reset the budget. While `no_path` or `obstacle_stop` requests zero motion, the
+blocked timeout owns the wait and the motion-progress budget pauses. When the
+route clears, prior unproductive driving time is retained. Alternating blocked
+and clear observations cannot repeatedly reset that budget. A continuously
+blocked route still reaches its configured timeout, and a motionless robot with
+a clear route still becomes `stalled`.
 
 On `stalled` or `navigation_failed`, clearing the map obstruction alone does not
 restart motion. Check the robot and route, then use **Retry navigation**, submit

@@ -50,7 +50,7 @@ class MappingStabilityTests(unittest.TestCase):
         slam.pose = np.array([4.,-3.,1.2])
         scan = dict(ranges=[9.]*360,angles=np.linspace(-math.pi,math.pi,360,endpoint=False).tolist(),
                     hits=[False]*360,offset=[.05,0,0],range_max=9.)
-        for frame in range(1,50):
+        for frame in range(50):
             # Accumulated gyro angles also survive dropped packets and wraps.
             wheel_angle = frame*.6*.62/(2*.12)
             ticks = np.rint(np.array([-1,-1,1,1])*wheel_angle*4096/(2*math.pi)).astype(int).tolist()
@@ -62,7 +62,9 @@ class MappingStabilityTests(unittest.TestCase):
             self.assertLess(abs(wrap(slam.pose[2]-(1.2+frame*.18))),1e-9)
             np.testing.assert_allclose(slam.pose[:2],[4,-3],atol=1e-9)
         # Old/hardware packets without a gyro keep encoder-only behavior.
-        legacy = WheelOdometry().update(ticks,.12,.62,4096)
+        encoder_only = WheelOdometry()
+        encoder_only.update([0]*4,.12,.62,4096)
+        legacy = encoder_only.update(ticks,.12,.62,4096)
         self.assertGreater(abs(wrap(legacy[2]-observation['odometry'][2])),.1)
 
     def test_skipped_scans_and_skid_steer_turns_keep_walls_stationary(self):
@@ -159,6 +161,8 @@ class MappingStabilityTests(unittest.TestCase):
 
     def test_repeated_circuits_reuse_anchors_and_limit_heading_drift(self):
         sim, odom, slam = FourWheelSimulator(), WheelOdometry(), LidarSlam()
+        # Establish a sensor baseline before the first commanded movement.
+        odom.update([0]*4,sim.radius,sim.track)
         first_anchor = None
         for _ in range(4):
             for _ in range(4):

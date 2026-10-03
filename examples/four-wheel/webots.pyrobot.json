@@ -171,7 +171,7 @@
       "lidar_frame": "lidar_link",
       "camera_frame": "camera_link",
       "wheel_radius": null,
-      "collision_radius": 0.48,
+      "collision_radius": 0.55,
       "ticks_per_turn": 4096
     },
     "environment": {
