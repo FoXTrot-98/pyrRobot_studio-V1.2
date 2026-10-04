@@ -10,6 +10,7 @@ export function KeyboardControl({ nodeId, runId, active }: { nodeId: string; run
   const keys = useRef(new Set<string>());
   const socket = useRef<WebSocket | null>(null);
   const sequence = useRef(0);
+  const pad = useRef<HTMLDivElement>(null);
   const [connected, setConnected] = useState(false);
   const [focused, setFocused] = useState(false);
   const send = () => {
@@ -24,14 +25,18 @@ export function KeyboardControl({ nodeId, runId, active }: { nodeId: string; run
     sequence.current = 0;
     ws.onopen = () => setConnected(true);
     ws.onclose = () => { setConnected(false); keys.current.clear(); };
-    const timer = setInterval(send, 75);
-    window.addEventListener("blur", release);
-    document.addEventListener("visibilitychange", release);
+    const ownerDocument=pad.current?.ownerDocument??document;
+    const ownerWindow=ownerDocument.defaultView??window;
+    const timer = ownerWindow.setInterval(send, 75);
+    ownerWindow.addEventListener("blur", release);
+    ownerWindow.addEventListener("pagehide", release);
+    ownerDocument.addEventListener("visibilitychange", release);
     return () => {
       release();
-      clearInterval(timer);
-      window.removeEventListener("blur", release);
-      document.removeEventListener("visibilitychange", release);
+      ownerWindow.clearInterval(timer);
+      ownerWindow.removeEventListener("blur", release);
+      ownerWindow.removeEventListener("pagehide", release);
+      ownerDocument.removeEventListener("visibilitychange", release);
       ws.close();
       socket.current = null;
     };
@@ -39,7 +44,7 @@ export function KeyboardControl({ nodeId, runId, active }: { nodeId: string; run
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeId, runId, active]);
 
-  return <div className={`keyboard-pad${active && focused ? " focused" : ""}`} tabIndex={active ? 0 : -1}
+  return <div ref={pad} className={`keyboard-pad${active && focused ? " focused" : ""}`} tabIndex={active ? 0 : -1}
     role="group" aria-label="Keyboard driving pad"
     onFocus={() => setFocused(true)} onBlur={() => { setFocused(false); release(); }}
     onKeyDown={(event) => {

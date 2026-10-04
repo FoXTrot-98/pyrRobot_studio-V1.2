@@ -7,6 +7,7 @@ import type { BusMessage } from "../types";
 import { KeyboardControl } from "./KeyboardControl";
 import { MapWorkspace } from "./MapWorkspace";
 import { WaypointMap } from "./WaypointMap";
+import { WorkspacePanel } from './WorkspacePanel';
 
 interface Props {
   nodeId: string;
@@ -104,6 +105,7 @@ export function SimulationPanel({ nodeId, params, running, runId, status, map, t
   return <section className="simulation-panel" aria-label="Robot simulation">
     <div className="simulation-controls">
       <strong>Robot simulation</strong>
+      <button onClick={()=>window.dispatchEvent(new Event('studio-reset-panels'))}>Reset panel layout</button>
       <button disabled={busy} onClick={() => selector ? selectMode(selector.mode === "stopped" ? "autonomous" : "stopped") : change({ enabled: !params.enabled })}>{(selector ? selector.mode !== "stopped" : params.enabled) ? "Pause motion" : "Resume motion"}</button>
       <span className="simulation-status">{!running ? "Stopped — Start Graph to simulate" : String(current?.status ?? "Starting sensors…").replaceAll("_", " ")}
         {running && typeof current?.distance_to_goal === "number" && ` · ${current.distance_to_goal.toFixed(2)} m to goal`}</span>
@@ -119,7 +121,8 @@ export function SimulationPanel({ nodeId, params, running, runId, status, map, t
     </div>}
     {error && <div role="alert" className="simulation-error">{error}</div>}
     <div className="simulation-views">
-      {viewerUrl ? <iframe src={viewerUrl} title="Rerun robot simulation" allow="fullscreen" /> : <p>Connecting to the Rerun viewer…</p>}
+      <WorkspacePanel id="rerun" title="Rerun">{viewerUrl ? <iframe src={viewerUrl} title="Rerun robot simulation" allow="fullscreen" /> : <p>Connecting to the Rerun viewer…</p>}</WorkspacePanel>
+      <WorkspacePanel id="controls" title="Robot controls">
       <aside className="navigation-controls" aria-label="Map and robot controls">
         {selector && <div className="drive-modes">
           <button aria-pressed={selector.mode === "manual"} disabled={busy} onClick={() => selectMode("manual")}>Manual</button>
@@ -173,7 +176,8 @@ export function SimulationPanel({ nodeId, params, running, runId, status, map, t
         }}>Explore map</button>
         <p>Visits reachable frontiers, then returns home after {String(params.exploration_targets ?? 20)} targets or when no eligible frontiers remain. Pause motion pauses exploration.</p>
         {current?.exploring === true && <p role="status">Exploration: {String(current.exploration_targets)} targets selected. {String(current.reason ?? "")}</p>}
-        </section><section className="control-card">
+        </section></div></aside></WorkspacePanel>
+        <WorkspacePanel id="slam" title="SLAM map"><aside className="navigation-controls" aria-label="SLAM map controls"><section className="control-card">
         <h3>SLAM waypoints</h3>
         <p>Click free or unknown map cells to queue destinations. Black cells are obstacles.</p>
         {current?.status === "no_path" && <p role="status">{String(current.reason ?? "No clear route. Choose a point farther from walls or explore more of the room in Manual mode.")}</p>}
@@ -196,8 +200,7 @@ export function SimulationPanel({ nodeId, params, running, runId, status, map, t
           setDraftWaypoints([]);
         }}>Clear waypoints</button>
         {waypoints.length > 0 && <ol>{waypoints.map((p, i) => <li key={i}>{p[0].toFixed(2)}, {p[1].toFixed(2)} m</li>)}</ol>}
-        </section></div>
-      </aside>
+        </section></aside></WorkspacePanel>
     </div>
   </section>;
 }

@@ -1,0 +1,20 @@
+/* SPDX-FileCopyrightText: 2026 Kanishka Kularathna (FoXTrot-98)
+SPDX-License-Identifier: Apache-2.0 */
+.simulation-views{gap:8px;overflow:auto;padding:6px;align-items:stretch}
+.workspace-panel{display:flex;flex-direction:column;min-width:280px;min-height:200px;flex:1 1 360px;background:#f5f7fb;color:#24344c;border:1px solid #bdcbda;border-radius:8px;overflow:hidden}
+.workspace-panel-title{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;background:#e8eef6;flex-wrap:wrap;cursor:grab;touch-action:none;user-select:none;font-size:12px}
+.workspace-panel-title div{display:flex;gap:4px;flex-wrap:wrap}
+.workspace-panel-title button,.workspace-placeholder button{font:inherit;padding:4px 6px;border:1px solid #b6c7db;border-radius:4px;background:white;color:#24344c;cursor:pointer}
+.workspace-panel-content{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
+.workspace-panel-content>.navigation-controls{width:100%;flex:1;border:0;min-width:0}
+.workspace-panel-content>iframe{height:100%;min-height:200px;width:100%;border:0;flex:1}
+.workspace-panel.floating{position:fixed;z-index:100;flex:none;box-shadow:0 12px 40px #142a4050}
+.workspace-panel.floating:focus-within{z-index:110}
+.workspace-panel.maximized{position:fixed;inset:8px;z-index:120;width:auto;height:auto}
+.workspace-panel:fullscreen{width:100vw;height:100vh;border-radius:0}
+.workspace-resize{position:absolute;bottom:0;right:0;width:22px;height:22px;cursor:nwse-resize;touch-action:none;border:0;background:#d4e1f1;color:#24344c}
+.studio-panel-window{margin:0;background:#f5f7fb;overflow:hidden;font-family:system-ui,sans-serif}
+.studio-panel-window>div{height:100vh}
+.workspace-panel.detached{width:100%;height:100%;border-radius:0}
+.workspace-placeholder{padding:16px;min-width:180px;display:flex;flex-direction:column;gap:10px;font-size:12px}
+@media(max-width:1000px){.simulation-views>.workspace-panel{flex:none;min-height:320px}.workspace-panel.floating{min-height:200px}}

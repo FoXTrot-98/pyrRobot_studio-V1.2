@@ -67,6 +67,10 @@ Stop the graph before closing the terminals with Ctrl+C.
 
 ## Current capabilities
 
+- [Movable simulation panels](docs/WORKSPACE_PANELS.md): float, resize, maximize
+  or pop out Rerun, Robot controls and the SLAM map into separate browser windows.
+  Floating layouts persist locally; detached views share the running session.
+
 - Visual plugin graphs, parameter editing, typed message contracts, diagnostics,
   supervised graph lifecycle and a UI-independent headless runtime.
 - Plugin SDK, CLI scaffolding and Plugin Builder with subprocess draft tests.
