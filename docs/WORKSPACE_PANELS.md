@@ -48,5 +48,7 @@ drafts, docking, pop-out closure, keyboard command release and parent cleanup.
 On 2026-10-04 the panel-specific browser checks and frontend build passed.
 The broader `browser_simulation.py` run initially stalled with zero drive output;
 an immediate repeat passed navigation, return home and saved-map workflows.
-The first run remains an unresolved intermittent runtime observation, not a
-claim that the panel work fixes all navigation timing problems.
+The subsequent [navigation timing investigation](SIMULATION_PERFORMANCE.md#mixed-mode-navigation-stall-follow-up-2026-10-04)
+reproduced delayed commands being rejected by the drive watchdog and corrected
+broker forwarding and browser telemetry buffering. This is a separate runtime
+fix; panel rearrangement itself does not change navigation behavior.

@@ -73,6 +73,32 @@ class AlgorithmTests(unittest.TestCase):
         self.assertEqual(angular,0.)
         self.assertGreaterEqual(math.dist([linear*.4,0.],[.45,.05]),.3)
 
+    def test_corner_clearance_does_not_depend_on_instantaneous_turn_response(self):
+        # A valid arc can be unsafe when a skid-steer drive has not yet turned.
+        grid = np.zeros((12,12),dtype=int)
+        grid[1,1] = 100
+        state = {'grid':grid,'origin':[0.,0.],'resolution':.15}
+        scan = {'angles':[0.], 'ranges':[9.], 'offset':[0.,0.,0.]}
+        pose = [.709,.76884,3.01829]
+        path = [[.975,.675],[.825,.675],[.675,.675],[.525,.825],
+                [.375,.825],[.225,.825],[.075,.975]]
+        for controller in ('proportional','fuzzy'):
+            linear, angular, status = follow_path(pose,path,path[-1],scan,
+                map_state=state,radius=.65,controller=controller)
+            self.assertEqual(status,'navigating')
+            self.assertLess(angular,0.)
+            # Check the complete short motion for missing, partial and full yaw
+            # response rather than assuming the command is physically achieved.
+            for response in (0., .25, .5, 1.):
+                rate = angular*response
+                for t in np.linspace(0.,.4,41):
+                    if rate == 0:
+                        point = [pose[0]+linear*t*math.cos(pose[2]),pose[1]+linear*t*math.sin(pose[2])]
+                    else:
+                        point = [pose[0]+linear/rate*(math.sin(pose[2]+rate*t)-math.sin(pose[2])),
+                                 pose[1]+linear/rate*(math.cos(pose[2])-math.cos(pose[2]+rate*t))]
+                    self.assertGreaterEqual(math.dist(point,[.225,.225]),.65)
+
     def test_fuzzy_symmetry_bounds_and_hard_stop(self):
         for error in np.linspace(0,math.pi,40):
             left=fuzzy_command(error,2.,.65,.55)

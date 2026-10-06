@@ -84,6 +84,14 @@ This is local planar SLAM, not robust global localization. The scan matcher now 
 
 ### Exploration regression status (2026-10-01)
 
+The **2026-10-06** car1 follow-up found an intermittent clearance failure on
+apartment return. The local controller now checks straight-ahead motion as well
+as its ideal turning arc, so clearance does not depend solely on achieving a
+commanded turn immediately. Two post-change apartment exploration/return checks
+passed with 0.140 m and 0.178 m physical home error and zero contacts; they used
+an explicit return request after 12 simulation seconds. See the
+[failure evidence, regression and reproduction commands](SIMULATION_PERFORMANCE.md#webots-turn-response-follow-up-2026-10-06).
+
 Follow-up on **2026-10-03**: the local car1 draft passed two runs per world,
 exploring for 12 simulation seconds before the test requested return home.
 

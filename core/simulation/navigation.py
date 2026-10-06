@@ -368,12 +368,18 @@ def follow_path(pose, path, goal, scan, max_speed=.65, stop_distance=.55, contro
         for scale in (1., .5, .25, 0.):
             speed = linear*scale
             times = np.linspace(0., .4, 5)[1:]
+            straight = np.asarray(pose[:2]) + speed*times[:,None]*np.array([math.cos(pose[2]),math.sin(pose[2])])
             if abs(angular) < 1e-6:
-                predicted = np.asarray(pose[:2]) + speed*times[:,None]*np.array([math.cos(pose[2]),math.sin(pose[2])])
+                predicted = straight
             else:
                 headings = pose[2]+angular*times
                 predicted = np.asarray(pose[:2]) + speed/angular*np.column_stack([
                     np.sin(headings)-math.sin(pose[2]), math.cos(pose[2])-np.cos(headings)])
+                # The requested yaw rate is not measured drive response. In
+                # particular, skid-steer wheels can turn more slowly than this
+                # ideal arc. Do not authorize forward speed that needs the turn
+                # to take effect immediately to remain outside clearance.
+                predicted = np.concatenate((predicted, straight))
             if not np.any(np.linalg.norm(predicted[:,None,:]-obstacles[None,:,:],axis=2) < radius):
                 linear = speed
                 break
