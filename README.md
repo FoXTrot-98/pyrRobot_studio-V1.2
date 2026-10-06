@@ -157,6 +157,17 @@ the final timer change also passed 12 focused recovery tests plus exploration
 and mission-management checks. These use deterministic obstacle/map inputs;
 live moving-obstacle recovery in Webots remains unqualified.
 
+The 2026-10-04 mixed-mode browser follow-up reproduced a command-delivery backlog
+behind the intermittent navigation stall. Native broker forwarding, bounded
+receive batches and producer-side browser telemetry buffering address that path
+without extending safety timeouts. The browser regression now verifies actual
+manual robot movement. See [timing investigation and verification](docs/SIMULATION_PERFORMANCE.md#mixed-mode-navigation-stall-follow-up-2026-10-04).
+
+The 2026-10-06 Webots follow-up also guards against forward motion that depends
+on an immediate turn response. Car1 passed two short apartment exploration/return
+checks and the external-room Dijkstra/fuzzy workflow, with zero reported contacts.
+See [turn-response fix and test limits](docs/SIMULATION_PERFORMANCE.md#webots-turn-response-follow-up-2026-10-06).
+
 The local Windows review of **V1.3.3 (`8deecc8`)**, on **2026-10-01**, passed:
 
 - All 29 regression test scripts, with the documented Windows POSIX serial-test skip.

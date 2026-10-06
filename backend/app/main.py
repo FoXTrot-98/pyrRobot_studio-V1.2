@@ -60,6 +60,7 @@ logger = logging.getLogger("pyrobot.backend")
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .security import StudioSecurity, studio_origins
+from .telemetry import TelemetryBuffer
 import os
 
 @asynccontextmanager
@@ -653,48 +654,26 @@ async def ws_control(websocket: WebSocket, node_id: str, run_id: str):
 @app.websocket("/ws/bus")
 async def ws_bus(websocket: WebSocket):
     await websocket.accept(subprotocol="pyrobot" if "pyrobot" in websocket.scope.get("subprotocols", []) else None)
-    loop = asyncio.get_running_loop()
-    pending = {}
     preview = websocket.query_params.get("preview") == "true"
-    queue = asyncio.Queue(maxsize=128)
-    active = True
-
-    def enqueue(payload):
-        if not active:
-            return
-        if not preview:
-            if queue.full():
-                queue.get_nowait()
-            queue.put_nowait(payload)
-            return
-        # A slow browser needs the latest value of each topic, not a FIFO of
-        # obsolete camera frames and occupancy grids.
-        pending[payload["topic"]] = payload
-        if len(pending) > 256:
-            del pending[next(iter(pending))]
+    buffer = TelemetryBuffer(preview=preview)
 
     def on_message(msg):
-        if active and not loop.is_closed():
-            loop.call_soon_threadsafe(enqueue, {
-                "topic": msg.topic, "payload": msg.payload, "ts": msg.timestamp.to_dict(),
-                "published_ts": (msg.published_timestamp or msg.timestamp).to_dict(),
-                "clock_domain": msg.clock_domain, "schema": msg.schema,
-                "run_id": msg.run_id,
-            })
+        buffer.append({
+            "topic": msg.topic, "payload": msg.payload, "ts": msg.timestamp.to_dict(),
+            "published_ts": (msg.published_timestamp or msg.timestamp).to_dict(),
+            "clock_domain": msg.clock_domain, "schema": msg.schema,
+            "run_id": msg.run_id,
+        })
 
     handle = runtime.bus.subscribe("", on_message)
 
     async def send_messages():
         while True:
-            if not preview:
-                await websocket.send_json(await queue.get())
-                continue
-            await asyncio.sleep(.1)
-            topics = list(pending)
-            for topic in topics:
-                payload = pending.pop(topic, None)
-                if payload is not None:
-                    await websocket.send_json(payload)
+            await asyncio.sleep(.1 if preview else .01)
+            # No per-packet event-loop wakeup on the control bus thread. Both
+            # this batch and the producer's pending buffer remain bounded.
+            for payload in buffer.drain():
+                await websocket.send_json(payload)
 
     async def receive_disconnect():
         while True:
@@ -708,7 +687,7 @@ async def ws_bus(websocket: WebSocket):
     except (WebSocketDisconnect, asyncio.CancelledError):
         pass
     finally:
-        active = False
+        buffer.close()
         handle.close()
         for task in tasks:
             task.cancel()

@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import uuid
 
 logger = logging.getLogger("pyrobot.bus.broker")
 
@@ -30,6 +32,9 @@ def run_broker(frontend: str = FRONTEND_ENDPOINT, backend: str = BACKEND_ENDPOIN
     ctx = zmq.Context.instance()
     xsub = ctx.socket(zmq.XSUB)
     xpub = ctx.socket(zmq.XPUB)
+    control = None
+    controller = None
+    finished = threading.Event()
     try:
         xsub.bind(frontend)
         xpub.bind(backend)
@@ -38,15 +43,30 @@ def run_broker(frontend: str = FRONTEND_ENDPOINT, backend: str = BACKEND_ENDPOIN
         if stop_event is None:
             zmq.proxy(xsub, xpub)
         else:
-            poller = zmq.Poller()
-            poller.register(xsub, zmq.POLLIN)
-            poller.register(xpub, zmq.POLLIN)
-            while not stop_event.is_set():
-                events = dict(poller.poll(20))
-                if xsub in events:
-                    xpub.send_multipart(xsub.recv_multipart())
-                if xpub in events:
-                    xsub.send_multipart(xpub.recv_multipart())
+            # Keep packet forwarding in libzmq, as in standalone mode. A Python
+            # recv/send/poll loop competes with mapping and browser serialization
+            # for the GIL on every packet, building up stale control traffic.
+            address = f"inproc://pyrobot-broker-stop-{uuid.uuid4().hex}"
+            control = ctx.socket(zmq.PAIR)
+            control.bind(address)
+
+            def request_stop():
+                sender = ctx.socket(zmq.PAIR)
+                try:
+                    sender.connect(address)
+                    while not finished.is_set():
+                        if stop_event.wait(.02):
+                            sender.send(b"TERMINATE")
+                            # Keep the pipe alive until the proxy consumes the
+                            # command, including an immediate startup stop.
+                            finished.wait()
+                            return
+                finally:
+                    sender.close(0)
+
+            controller = threading.Thread(target=request_stop, name="pyrobot-broker-stop", daemon=True)
+            controller.start()
+            zmq.proxy_steerable(xsub, xpub, control=control)
     except KeyboardInterrupt:
         pass
     except Exception as exc:
@@ -54,6 +74,11 @@ def run_broker(frontend: str = FRONTEND_ENDPOINT, backend: str = BACKEND_ENDPOIN
             raise
         errors.append(exc)
     finally:
+        finished.set()
+        if controller is not None:
+            controller.join(timeout=1)
+        if control is not None:
+            control.close(0)
         if ready_event:
             ready_event.set()
         xsub.close(0)

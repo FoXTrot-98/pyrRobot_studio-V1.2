@@ -242,14 +242,26 @@ class ZmqTransport(BusTransport):
                     pub.send_multipart([topic, raw])
                 if not sub.poll(5):
                     continue
-                topic_b, raw = sub.recv_multipart()
-                topic = topic_b.decode("utf-8")
-                for pattern, cb in callbacks:
-                    if topic.startswith(pattern):
-                        try:
-                            cb(topic, raw)
-                        except Exception:
-                            log.exception("Bus callback failed for %s", topic)
+                # Drain ready packets without a timed poll for every message.
+                # Bound time as well as count: callbacks can be expensive, and
+                # outgoing commands and the health monitor need regular service.
+                receive_deadline = time.monotonic() + .005
+                for _ in range(256):
+                    if self._stop.is_set():
+                        break
+                    try:
+                        topic_b, raw = sub.recv_multipart(flags=zmq.NOBLOCK)
+                    except zmq.Again:
+                        break
+                    topic = topic_b.decode("utf-8")
+                    for pattern, cb in callbacks:
+                        if topic.startswith(pattern):
+                            try:
+                                cb(topic, raw)
+                            except Exception:
+                                log.exception("Bus callback failed for %s", topic)
+                    if time.monotonic() >= receive_deadline:
+                        break
         except Exception as exc:
             self._error = exc
             self._stop.set()
